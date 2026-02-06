@@ -212,7 +212,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         formData.append("Name", String(args?.title || ""));
         formData.append("CompanyName", String(args?.company || ""));
         if (args?.location) formData.append("Location", String(args.location));
-        if (args?.job_url) formData.append("JobUrl", String(args.job_url));
+        // JobUrl is required by backend - use provided URL or generate a placeholder
+        const jobUrl = args?.job_url || `https://jobjourney.me/manual/${Date.now()}`;
+        formData.append("JobUrl", String(jobUrl));
         if (args?.description) formData.append("Description", String(args.description));
         formData.append("Status", String(statusMap[String(args?.status || "saved")] || JOB_STATUS.SAVED));
         formData.append("IsStarred", String(args?.is_starred || false));
