@@ -1,7 +1,7 @@
 {
   "name": "jobjourney-mcp",
-  "version": "1.0.2",
-  "description": "MCP server for JobJourney - save jobs, track applications, find coffee chat contacts",
+  "version": "2.0.0",
+  "description": "MCP server for JobJourney - save jobs, track applications, AI job fit evaluation, cover letter generation, interview prep, coffee chat networking, and more",
   "main": "dist/index.js",
   "bin": {
     "jobjourney-mcp": "dist/index.js"
