@@ -1,8 +1,11 @@
 {
   "mcpServers": {
     "jobjourney": {
-      "type": "url",
-      "url": "https://server.jobjourney.me/mcp"
+      "type": "http",
+      "url": "https://server.jobjourney.me/mcp",
+      "headers": {
+        "X-API-Key": "${JOBJOURNEY_API_KEY}"
+      }
     }
   }
 }

@@ -13,7 +13,7 @@ import { registerCvTools } from "./tools/cv.js";
 import { registerChatbotTools } from "./tools/chatbot.js";
 import { registerScrapingTools } from "./tools/scraping.js";
 import { registerAnalyticsTools } from "./tools/analytics.js";
-const transport = (process.env.TRANSPORT || "httpStream");
+const transport = (process.env.TRANSPORT || "stdio");
 const server = new FastMCP({
     name: "jobjourney-claude-plugin",
     version: "3.1.0",

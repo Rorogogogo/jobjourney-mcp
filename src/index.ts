@@ -17,7 +17,7 @@ import { registerScrapingTools } from "./tools/scraping.js";
 import { registerAnalyticsTools } from "./tools/analytics.js";
 import { SessionAuth } from "./types.js";
 
-const transport = (process.env.TRANSPORT || "httpStream") as "httpStream" | "stdio";
+const transport = (process.env.TRANSPORT || "stdio") as "httpStream" | "stdio";
 
 const server = new FastMCP<SessionAuth>({
   name: "jobjourney-claude-plugin",
