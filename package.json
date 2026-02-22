@@ -1,7 +1,7 @@
 {
   "name": "jobjourney-mcp",
-  "version": "2.0.0",
-  "description": "MCP server for JobJourney - save jobs, track applications, AI job fit evaluation, cover letter generation, interview prep, coffee chat networking, and more",
+  "version": "3.1.0",
+  "description": "FastMCP server for JobJourney - save jobs, track applications, AI job fit evaluation, cover letter generation, interview prep, coffee chat networking, and more",
   "main": "dist/index.js",
   "bin": {
     "jobjourney-mcp": "dist/index.js"
@@ -35,11 +35,12 @@
   "engines": {
     "node": ">=18"
   },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0"
-  },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "fastmcp": "^3.33.0",
+    "zod": "^4.3.6"
   }
 }
