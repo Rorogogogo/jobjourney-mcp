@@ -1,0 +1,11 @@
+{
+  "name": "jobjourney",
+  "description": "Track job applications, get AI resume evaluations, generate cover letters, prep for interviews, and manage coffee chat networking — all through Claude Code.",
+  "version": "3.1.0",
+  "author": "JobJourney",
+  "homepage": "https://jobjourney.me",
+  "repository": "https://github.com/Rorogogogo/jobjourney-claude-plugin",
+  "mcp": {
+    "config_path": "../.mcp.json"
+  }
+}

@@ -1,10 +1,10 @@
 {
-  "name": "jobjourney-mcp",
+  "name": "jobjourney-claude-plugin",
   "version": "3.1.0",
   "description": "FastMCP server for JobJourney - save jobs, track applications, AI job fit evaluation, cover letter generation, interview prep, coffee chat networking, and more",
   "main": "dist/index.js",
   "bin": {
-    "jobjourney-mcp": "dist/index.js"
+    "jobjourney-claude-plugin": "dist/index.js"
   },
   "type": "module",
   "scripts": {
@@ -25,11 +25,14 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Rorogogogo/jobjourney-mcp"
+    "url": "https://github.com/Rorogogogo/jobjourney-claude-plugin"
   },
   "homepage": "https://jobjourney.me",
   "files": [
     "dist",
+    ".claude-plugin",
+    ".mcp.json",
+    "LICENSE",
     "README.md"
   ],
   "engines": {

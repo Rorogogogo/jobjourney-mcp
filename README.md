@@ -1,6 +1,6 @@
-# JobJourney MCP
+# JobJourney Claude Plugin
 
-MCP (Model Context Protocol) server for [JobJourney](https://jobjourney.me) - track job applications and network with professionals using AI.
+Claude Code plugin for [JobJourney](https://jobjourney.me) - track job applications and network with professionals using AI.
 
 ## Features
 
@@ -25,7 +25,23 @@ MCP (Model Context Protocol) server for [JobJourney](https://jobjourney.me) - tr
 
 ---
 
-### Option A: Claude Code (CLI)
+### Option A: Claude Code Plugin (Recommended)
+
+Install as a Claude Code plugin:
+
+```bash
+claude plugin add jobjourney-claude-plugin
+```
+
+When prompted, set your API key:
+
+```bash
+claude mcp update-env jobjourney --key JOBJOURNEY_API_KEY=jj_your_api_key_here
+```
+
+---
+
+### Option B: Claude Code (CLI)
 
 Run this command in your terminal:
 
@@ -33,7 +49,7 @@ Run this command in your terminal:
 claude mcp add jobjourney \
   -e JOBJOURNEY_API_URL=https://server.jobjourney.me \
   -e JOBJOURNEY_API_KEY=jj_your_api_key_here \
-  -- npx -y jobjourney-mcp
+  -- npx -y jobjourney-claude-plugin
 ```
 
 Or add to `~/.claude.json`:
@@ -43,7 +59,7 @@ Or add to `~/.claude.json`:
   "mcpServers": {
     "jobjourney": {
       "command": "npx",
-      "args": ["-y", "jobjourney-mcp"],
+      "args": ["-y", "jobjourney-claude-plugin"],
       "env": {
         "JOBJOURNEY_API_URL": "https://server.jobjourney.me",
         "JOBJOURNEY_API_KEY": "jj_your_api_key_here"
@@ -55,7 +71,7 @@ Or add to `~/.claude.json`:
 
 ---
 
-### Option B: Claude Desktop (App)
+### Option C: Claude Desktop (App)
 
 Edit your Claude Desktop config file:
 
@@ -67,7 +83,7 @@ Edit your Claude Desktop config file:
   "mcpServers": {
     "jobjourney": {
       "command": "npx",
-      "args": ["-y", "jobjourney-mcp"],
+      "args": ["-y", "jobjourney-claude-plugin"],
       "env": {
         "JOBJOURNEY_API_URL": "https://server.jobjourney.me",
         "JOBJOURNEY_API_KEY": "jj_your_api_key_here"
@@ -162,8 +178,8 @@ Just talk naturally to Claude:
 
 - [JobJourney Website](https://jobjourney.me)
 - [Setup Guide](https://jobjourney.me/mcp-setup)
-- [GitHub Repository](https://github.com/Rorogogogo/jobjourney-mcp)
-- [Report Issues](https://github.com/Rorogogogo/jobjourney-mcp/issues)
+- [GitHub Repository](https://github.com/Rorogogogo/jobjourney-claude-plugin)
+- [Report Issues](https://github.com/Rorogogogo/jobjourney-claude-plugin/issues)
 
 ## License
 

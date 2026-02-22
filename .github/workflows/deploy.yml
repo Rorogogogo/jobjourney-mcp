@@ -1,4 +1,4 @@
-name: MCP Server CI/CD
+name: Plugin CI/CD
 
 on:
   push:
