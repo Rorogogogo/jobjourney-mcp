@@ -15,6 +15,7 @@ import { registerCvTools } from "./tools/cv.js";
 import { registerChatbotTools } from "./tools/chatbot.js";
 import { registerScrapingTools } from "./tools/scraping.js";
 import { registerAnalyticsTools } from "./tools/analytics.js";
+import { registerLocalScrapingTools } from "./tools/local-scraping.js";
 import { SessionAuth } from "./types.js";
 
 const transport = (process.env.TRANSPORT || "stdio") as "httpStream" | "stdio";
@@ -57,6 +58,7 @@ registerCvTools(server);
 registerChatbotTools(server);
 registerScrapingTools(server);
 registerAnalyticsTools(server);
+registerLocalScrapingTools(server);
 
 if (transport === "httpStream") {
   const port = parseInt(process.env.PORT || "8080", 10);
