@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-16T10:04:31.338Z",
+  "generatedAt": "2026-03-16T13:04:39.340Z",
   "request": {
     "keyword": "full stack",
     "location": "Sydney",
@@ -22,7 +22,7 @@
     "externalUrlCount": 1,
     "atsBreakdown": {
       "unknown": 6,
-      "lever": 1,
+      "ashby": 1,
       "linkedin_easy_apply": 3
     },
     "firstJobIds": [
@@ -35,27 +35,27 @@
       "4384955640",
       "4371459158",
       "4378477066",
-      "4374930759"
+      "4364539153"
     ],
     "externalJobs": [
       {
-        "jobId": "4377425714",
-        "title": "Full Stack Engineer",
-        "company": "Spotify",
-        "externalUrl": "https://jobs.lever.co/spotify/74c04c1a-afe8-4616-be68-ae452daed595?lever-source=LinkedInJobs",
-        "atsType": "lever"
+        "jobId": "4369410943",
+        "title": "Software Engineer (Fullstack)",
+        "company": "Heidi",
+        "externalUrl": "https://jobs.ashbyhq.com/heidihealth.com.au/dd3e7c68-c983-4179-9d73-96f17154e718/application?utm_source=wWVW2gV3nl",
+        "atsType": "ashby"
       }
     ]
   },
   "python": {
     "totalJobs": 10,
     "postedAtCount": 10,
-    "externalUrlCount": 2,
+    "externalUrlCount": 3,
     "atsBreakdown": {
       "ashby": 1,
-      "lever": 1,
+      "lever": 2,
       "linkedin_easy_apply": 3,
-      "unknown": 5
+      "unknown": 4
     },
     "firstJobIds": [
       "4260005713",
@@ -67,7 +67,7 @@
       "4384955640",
       "4371459158",
       "4378477066",
-      "4374930759"
+      "4364539153"
     ],
     "externalJobs": [
       {
@@ -83,6 +83,13 @@
         "company": "Heidi",
         "externalUrl": "https://jobs.ashbyhq.com/heidihealth.com.au/dd3e7c68-c983-4179-9d73-96f17154e718/application?utm_source=wWVW2gV3nl",
         "atsType": "ashby"
+      },
+      {
+        "jobId": "4364539153",
+        "title": "Software Engineer - Full Stack",
+        "company": "Blinq",
+        "externalUrl": "https://jobs.lever.co/blinq/e68c0418-3a71-4da0-8187-b0e324a72245/apply?lever-source=LinkedIn&src=linkedin",
+        "atsType": "lever"
       }
     ]
   }

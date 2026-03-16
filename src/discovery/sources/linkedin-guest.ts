@@ -30,6 +30,7 @@ export interface LinkedInGuestJobDetail {
   company: string;
   location: string;
   description: string;
+  salary: string;
   applyUrl: string | null;
   isEasyApply: boolean;
   jobUrl: string;
@@ -84,6 +85,7 @@ export class LinkedInGuestSource implements DiscoverySourceRunner {
           job.externalUrl = detection.applyUrl || "";
           job.atsType = detection.atsType;
           job.atsIdentifier = detection.companyIdentifier || "";
+          job.salary = detail.salary;
           job.applicantCount = detail.applicantCount;
           jobs.push(job);
         } catch {
@@ -182,11 +184,18 @@ export function parseLinkedInGuestJobDetail(
     /<[^>]*class=(['"])[^"']*topcard__flavor--metadata[^"']*\1[^>]*>([\s\S]*?)<\/[^>]+>/i,
     /<[^>]*class=(['"])[^"']*topcard__flavor[^"']*\1[^>]*>([\s\S]*?)<\/[^>]+>/i,
   ]);
-  const description = extractFirstText(html, [
-    /<[^>]*class=(['"])[^"']*show-more-less-html__markup[^"']*\1[^>]*>([\s\S]*?)<\/[^>]+>/i,
-    /<[^>]*class=(['"])[^"']*description__text[^"']*\1[^>]*>([\s\S]*?)<\/[^>]+>/i,
-    /<[^>]*class=(['"])[^"']*description[^"']*\1[^>]*>([\s\S]*?)<\/[^>]+>/i,
-  ], "\n");
+  const description = extractContainerTextByClass(
+    html,
+    [
+      "show-more-less-html__markup",
+      "description__text",
+      "jobs-box__html-content",
+      "jobs-description__content",
+      "description",
+    ],
+    "\n",
+  );
+  const salary = extractSalary(html);
   const { applyUrl, isEasyApply } = extractApplyState(html);
   const applicantCount = extractApplicantCount(html);
 
@@ -196,6 +205,7 @@ export function parseLinkedInGuestJobDetail(
     company,
     location,
     description,
+    salary,
     applyUrl,
     isEasyApply,
     jobUrl: options.jobUrl ?? "",
@@ -326,6 +336,26 @@ function extractApplicantCount(html: string): string {
   return "";
 }
 
+function extractSalary(html: string): string {
+  const candidateClassNames = [
+    "job-details-preferences-and-skills__pill",
+    "job-details-jobs-unified-top-card__job-insight",
+    "jobs-unified-top-card__salary-info",
+    "compensation__salary-range",
+  ];
+
+  for (const className of candidateClassNames) {
+    for (const text of extractContainerTextsByClass(html, className)) {
+      const normalized = text.replace(/See how you compare.*/i, "").trim();
+      if (looksLikeSalary(normalized)) {
+        return normalized;
+      }
+    }
+  }
+
+  return "";
+}
+
 function extractAnchors(html: string): Array<{
   attributes: Record<string, string>;
   text: string;
@@ -375,6 +405,96 @@ function extractFirstText(
   return "";
 }
 
+function extractContainerTextByClass(
+  html: string,
+  classNames: string[],
+  separator = " ",
+): string {
+  let bestCandidate = "";
+
+  for (const className of classNames) {
+    for (const text of extractContainerTextsByClass(html, className, separator)) {
+      if (!text) {
+        continue;
+      }
+      if (!bestCandidate) {
+        bestCandidate = text;
+      }
+      if (!looksLikeThinHeading(text)) {
+        return text;
+      }
+    }
+  }
+
+  return bestCandidate;
+}
+
+function extractContainerTextsByClass(
+  html: string,
+  className: string,
+  separator = " ",
+): string[] {
+  const texts: string[] = [];
+  const pattern = new RegExp(
+    `<([a-z0-9]+)\\b[^>]*class=(['"])[^"']*${escapeRegExp(className)}[^"']*\\2[^>]*>`,
+    "gi",
+  );
+
+  for (const match of html.matchAll(pattern)) {
+    const tagName = (match[1] ?? "").toLowerCase();
+    const startIndex = (match.index ?? 0) + match[0].length;
+    const innerHtml = extractBalancedInnerHtml(html, startIndex, tagName);
+    if (innerHtml === null) {
+      continue;
+    }
+
+    const normalized = normalizeWhitespace(
+      stripTags(decodeHtmlEntities(innerHtml), separator),
+    );
+    if (normalized) {
+      texts.push(normalized);
+    }
+  }
+
+  return texts;
+}
+
+function extractBalancedInnerHtml(
+  html: string,
+  startIndex: number,
+  tagName: string,
+): string | null {
+  const tagPattern = /<\/?([a-z0-9]+)\b[^>]*>/gi;
+  let depth = 1;
+
+  for (const match of html.slice(startIndex).matchAll(tagPattern)) {
+    const fullMatch = match[0] ?? "";
+    const matchedTag = (match[1] ?? "").toLowerCase();
+    if (matchedTag !== tagName) {
+      continue;
+    }
+
+    const relativeIndex = match.index ?? 0;
+    const absoluteIndex = startIndex + relativeIndex;
+    const isClosingTag = fullMatch.startsWith("</");
+    const isSelfClosingTag = /\/>$/.test(fullMatch);
+
+    if (isClosingTag) {
+      depth -= 1;
+      if (depth === 0) {
+        return html.slice(startIndex, absoluteIndex);
+      }
+      continue;
+    }
+
+    if (!isSelfClosingTag) {
+      depth += 1;
+    }
+  }
+
+  return null;
+}
+
 function extractFirstAttribute(html: string, patterns: RegExp[]): string {
   for (const pattern of patterns) {
     const match = html.match(pattern);
@@ -402,6 +522,20 @@ function stripTags(html: string, separator = " "): string {
 
 function normalizeWhitespace(value: string): string {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function looksLikeThinHeading(value: string): boolean {
+  return value.length <= 32 && !/[.!?]/.test(value);
+}
+
+function looksLikeSalary(value: string): boolean {
+  return /[$€£¥₹]|salary|compensation|pay|package|\/yr|\/hour|\/month|\/week|\bper\s+(year|annum|hour|month|week|day)\b|\d+\s*[kK]\b/i.test(
+    value,
+  );
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function decodeHtmlEntities(text: string): string {

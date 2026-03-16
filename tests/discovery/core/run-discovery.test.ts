@@ -51,6 +51,42 @@ describe("runDiscovery", () => {
     });
   });
 
+  it("emits source lifecycle logs during discovery", async () => {
+    const logger = vi.fn();
+
+    await runDiscovery(
+      {
+        keyword: "full stack",
+        location: "Sydney",
+        sources: ["seek"],
+      },
+      {
+        sourceFactories: {
+          seek: () => ({
+            name: "seek",
+            discoverJobs: async () => [],
+          }),
+        },
+        atsCrawlerFactories: {},
+        extractedAt: () => "2026-03-15T00:00:00Z",
+        logger,
+      },
+    );
+
+    expect(logger).toHaveBeenCalledWith({
+      event: "discovery_source_start",
+      source: "seek",
+      keyword: "full stack",
+      location: "Sydney",
+      pages: 30,
+    });
+    expect(logger).toHaveBeenCalledWith({
+      event: "discovery_source_success",
+      source: "seek",
+      discoveredJobs: 0,
+    });
+  });
+
   it("expands supported ATS companies only once per ats/company pair", async () => {
     const crawlJobs = vi.fn(async () => [
       createEmptyDiscoveryJob({
@@ -124,9 +160,10 @@ describe("runDiscovery", () => {
       experienceLevel: "senior",
     });
     expect(
-      result.jobs.find((job) => job.source === "greenhouse" && job.id === "gh-1"),
+      result.jobs.find((job) => job.source === "linkedin" && job.id === "gh-1"),
     ).toMatchObject({
-      source: "greenhouse",
+      source: "linkedin",
+      atsType: "greenhouse",
       techStack: JSON.stringify(["PostgreSQL", "Python"]),
     });
   });

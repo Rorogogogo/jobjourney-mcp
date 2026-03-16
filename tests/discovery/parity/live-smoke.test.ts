@@ -4,9 +4,13 @@ import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import {
   buildLiveParityReport,
+  runLiveParitySmoke,
+  summarizeDiscoveryJobs,
   writeLiveParityReport,
+  type LiveParityRequest,
   type LiveParityEngineSummary,
 } from "../../../src/discovery/parity/live-smoke.js";
+import { createEmptyDiscoveryJob } from "../../../src/discovery/core/types.js";
 
 describe("buildLiveParityReport", () => {
   it("records field-level divergences without failing the whole smoke report", () => {
@@ -117,6 +121,104 @@ describe("writeLiveParityReport", () => {
     expect(JSON.parse(readFileSync(reportPath, "utf8"))).toMatchObject({
       status: "matched",
       differences: [],
+    });
+  });
+});
+
+describe("runLiveParitySmoke", () => {
+  it("stores TS jobs in the main DB flow by default", async () => {
+    const persisted: Array<{
+      jobs: Array<{ id: string; source: string }>;
+      request: LiveParityRequest;
+    }> = [];
+
+    const result = await runLiveParitySmoke({
+      keyword: "full stack",
+      location: "Sydney",
+      pages: 1,
+      reportPath: join(
+        mkdtempSync(join(tmpdir(), "jobjourney-live-parity-store-")),
+        "report.json",
+      ),
+      generatedAt: () => "2026-03-16T00:00:00Z",
+      executeTsRun: async () => [
+        createEmptyDiscoveryJob({
+          id: "linkedin-1",
+          source: "linkedin",
+          title: "Full Stack Engineer",
+          company: "Example",
+          location: "Sydney",
+          description: "React and AWS",
+          jobUrl: "https://www.linkedin.com/jobs/view/1",
+          extractedAt: "2026-03-16T00:00:00Z",
+          postedAt: "2026-03-15",
+        }),
+      ],
+      executePythonRun: async () => ({
+        totalJobs: 1,
+        postedAtCount: 1,
+        externalUrlCount: 0,
+        atsBreakdown: { unknown: 1 },
+        firstJobIds: ["linkedin-1"],
+        externalJobs: [],
+      }),
+      storeTsJobs: async (jobs, request) => {
+        persisted.push({
+          jobs: jobs.map((job) => ({ id: job.id, source: job.source })),
+          request,
+        });
+      },
+    });
+
+    expect(result.report.status).toBe("matched");
+    expect(persisted).toEqual([
+      {
+        jobs: [{ id: "linkedin-1", source: "linkedin" }],
+        request: {
+          keyword: "full stack",
+          location: "Sydney",
+          pages: 1,
+          minDelay: 1.2,
+          maxDelay: 1.8,
+          sources: ["linkedin"],
+        },
+      },
+    ]);
+  });
+});
+
+describe("summarizeDiscoveryJobs", () => {
+  it("counts only primary linkedin listings for live parity summaries", () => {
+    const primary = createEmptyDiscoveryJob({
+      id: "linkedin-1",
+      source: "linkedin",
+      title: "Full Stack Engineer",
+      company: "Example",
+      location: "Sydney",
+      description: "",
+      jobUrl: "https://www.linkedin.com/jobs/view/1",
+      extractedAt: "2026-03-16T00:00:00Z",
+    });
+    const expanded = createEmptyDiscoveryJob({
+      id: "lever-1",
+      source: "linkedin",
+      title: "Expanded ATS Job",
+      company: "Example",
+      location: "Sydney",
+      description: "",
+      jobUrl: "https://jobs.lever.co/example/1",
+      extractedAt: "2026-03-16T00:00:00Z",
+    });
+    expanded.externalUrl = "https://jobs.lever.co/example/1";
+    expanded.atsType = "lever";
+
+    const summary = summarizeDiscoveryJobs([primary, expanded], "linkedin");
+
+    expect(summary).toMatchObject({
+      totalJobs: 1,
+      externalUrlCount: 0,
+      firstJobIds: ["linkedin-1"],
+      externalJobs: [],
     });
   });
 });

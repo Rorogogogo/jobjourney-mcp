@@ -166,5 +166,7 @@ describe("registerLocalScrapingTools", () => {
     expect(report).toContain("Latest Discovery Run");
     expect(report).toContain("Senior Full Stack Engineer");
     expect(report).toContain("linkedin, seek");
+    expect(report).toContain("Job URL:");
+    expect(report).toContain("External URL:");
   });
 });

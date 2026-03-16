@@ -12,6 +12,7 @@ import { JoraBrowserSource } from "../sources/jora-browser.js";
 import { getActiveDiscoverySourceNames } from "../sources/registry.js";
 export async function runDiscovery(options, dependencies = {}) {
     const selectedSources = options.sources ?? getActiveDiscoverySourceNames();
+    const logger = dependencies.logger;
     const httpClient = dependencies.httpClient ??
         new HttpClient({
             rateLimiter: new RateLimiter({
@@ -50,6 +51,13 @@ export async function runDiscovery(options, dependencies = {}) {
             failedSources.push(sourceName);
             continue;
         }
+        logger?.({
+            event: "discovery_source_start",
+            source: sourceName,
+            keyword: options.keyword,
+            location: options.location,
+            pages: options.pages ?? 30,
+        });
         try {
             const source = factory();
             const discoveredJobs = await source.discoverJobs({
@@ -59,8 +67,13 @@ export async function runDiscovery(options, dependencies = {}) {
                 extractedAt: extractedAtFactory(),
             });
             successfulSources.push(sourceName);
+            logger?.({
+                event: "discovery_source_success",
+                source: sourceName,
+                discoveredJobs: discoveredJobs.length,
+            });
             for (const job of discoveredJobs) {
-                const enriched = enrichDiscoveryJob(await maybeApplyCareerDiscovery(applyAtsDetection(job), options, careerDiscoverer, careerDiscoveryCache, dependencies.logger));
+                const enriched = enrichDiscoveryJob(await maybeApplyCareerDiscovery(applyAtsDetection(job), options, careerDiscoverer, careerDiscoveryCache, logger));
                 pushJob(jobs, seenJobs, enriched);
                 if (!isSupportedAts(enriched.atsType) || !enriched.atsIdentifier) {
                     continue;
@@ -75,16 +88,44 @@ export async function runDiscovery(options, dependencies = {}) {
                 }
                 expandedCompanyKeys.add(companyKey);
                 expandedCompanies.push(companyKey);
+                logger?.({
+                    event: "discovery_ats_expand_start",
+                    source: enriched.source,
+                    atsType: enriched.atsType,
+                    companyIdentifier: enriched.atsIdentifier,
+                });
                 const atsJobs = await crawlerFactory().crawlJobs(enriched.atsIdentifier, extractedAtFactory());
+                logger?.({
+                    event: "discovery_ats_expand_success",
+                    source: enriched.source,
+                    atsType: enriched.atsType,
+                    companyIdentifier: enriched.atsIdentifier,
+                    discoveredJobs: atsJobs.length,
+                });
                 for (const atsJob of atsJobs) {
+                    atsJob.source = enriched.source;
+                    atsJob.atsType = enriched.atsType;
+                    atsJob.atsIdentifier = enriched.atsIdentifier;
                     pushJob(jobs, seenJobs, enrichDiscoveryJob(applyAtsDetection(atsJob)));
                 }
             }
         }
-        catch {
+        catch (error) {
+            logger?.({
+                event: "discovery_source_error",
+                source: sourceName,
+                error: error instanceof Error ? error.message : String(error),
+            });
             failedSources.push(sourceName);
         }
     }
+    logger?.({
+        event: "discovery_run_complete",
+        successfulSources,
+        failedSources,
+        totalJobs: jobs.length,
+        expandedCompanies,
+    });
     return {
         jobs,
         sources: successfulSources,
@@ -146,7 +187,7 @@ async function maybeApplyCareerDiscovery(job, options, careerDiscoverer, cache, 
         const result = (await getCachedCareerDiscoveryResult({
             cache,
             companyName: job.company,
-            location: job.location,
+            location: [job.location, options.location].filter(Boolean).join(" "),
             atsType: job.atsType,
             careerDiscoverer,
             logger,

@@ -28,6 +28,10 @@ export class AgentScheduler {
     this.runDiscoveryImpl = deps.runDiscovery ?? runDiscovery;
   }
 
+  private readonly discoveryLogger = (payload: Record<string, unknown>) => {
+    console.log(`[agent:discover] ${JSON.stringify(payload)}`);
+  };
+
   reconcile(): void {
     const db = openDatabase(this.dbPath);
     try {
@@ -84,6 +88,8 @@ export class AgentScheduler {
           location,
           sources: sources ? sources.split(",").map((value) => value.trim()).filter(Boolean) as any : undefined,
           pages: 30,
+        }, {
+          logger: this.discoveryLogger,
         });
         new DiscoveryJobsRepo(db).upsertJobs(result.jobs, {
           keyword,

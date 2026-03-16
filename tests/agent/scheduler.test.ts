@@ -113,6 +113,8 @@ describe("AgentScheduler", () => {
       location: "Sydney",
       sources: ["linkedin", "seek"],
       pages: 30,
+    }, {
+      logger: expect.any(Function),
     });
     scheduler.stop();
   });

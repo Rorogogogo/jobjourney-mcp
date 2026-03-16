@@ -117,4 +117,51 @@ describe("runDiscovery fallback", () => {
 
     expect(discover).not.toHaveBeenCalled();
   });
+
+  it("passes the original search location into career discovery", async () => {
+    const discover = vi.fn(async () => ({
+      companyName: "Example Co",
+      inferredDomain: "example.com",
+      probedUrls: [],
+      atsType: "unknown",
+      companyIdentifier: null,
+      applyUrl: null,
+      outcome: "no_ats_detected",
+    }));
+    const linkedInJob = createEmptyDiscoveryJob({
+      id: "li-1",
+      source: "linkedin",
+      title: "Software Engineer",
+      company: "Example Co",
+      location: "",
+      description: "Role description.",
+      jobUrl: "https://www.linkedin.com/jobs/view/1",
+      extractedAt: "2026-03-15T00:00:00Z",
+    });
+
+    await runDiscovery(
+      {
+        keyword: "software engineer",
+        location: "Australia",
+        sources: ["linkedin"],
+        careerDiscovery: true,
+      },
+      {
+        sourceFactories: {
+          linkedin: () => ({
+            name: "linkedin",
+            discoverJobs: async () => [linkedInJob],
+          }),
+        },
+        atsCrawlerFactories: {},
+        careerDiscoverer: { discover },
+        extractedAt: () => "2026-03-15T00:00:00Z",
+      },
+    );
+
+    expect(discover).toHaveBeenCalledWith({
+      companyName: "Example Co",
+      location: "Australia",
+    });
+  });
 });

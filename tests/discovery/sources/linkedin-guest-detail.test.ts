@@ -99,4 +99,42 @@ describe("parseLinkedInGuestJobDetail", () => {
 
     expect(detail.applicantCount).toBe("Over 200 applicants");
   });
+
+  it("extracts the full nested description block instead of only the first heading", () => {
+    const html = `
+      <div>
+        <div class="show-more-less-html__markup">
+          <span>About Us</span>
+          <p>We are building cloud-native products for enterprise teams.</p>
+          <ul>
+            <li>3+ years experience with TypeScript</li>
+            <li>Australian working rights required</li>
+          </ul>
+        </div>
+      </div>
+    `;
+
+    const detail = parseLinkedInGuestJobDetail(html, { jobId: "123" });
+
+    expect(detail.description).toContain("About Us");
+    expect(detail.description).toContain(
+      "We are building cloud-native products for enterprise teams.",
+    );
+    expect(detail.description).toContain("3+ years experience with TypeScript");
+    expect(detail.description).toContain("Australian working rights required");
+  });
+
+  it("extracts salary from guest compensation insights when present", () => {
+    const html = `
+      <div>
+        <span class="job-details-jobs-unified-top-card__job-insight">
+          $150,000 - $180,000 per year
+        </span>
+      </div>
+    `;
+
+    const detail = parseLinkedInGuestJobDetail(html, { jobId: "123" });
+
+    expect(detail.salary).toBe("$150,000 - $180,000 per year");
+  });
 });

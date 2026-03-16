@@ -7,6 +7,8 @@ import { spawn } from "node:child_process";
 import Database from "better-sqlite3";
 import { runDiscovery } from "../core/run-discovery.js";
 import type { DiscoveryJob, DiscoveryRunOptions } from "../core/types.js";
+import { DiscoveryJobsRepo } from "../storage/discovery-jobs-repo.js";
+import { openDatabase } from "../../storage/sqlite/db.js";
 
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 const PLUGIN_ROOT = resolve(MODULE_DIR, "../../..");
@@ -56,6 +58,11 @@ export interface RunLiveParitySmokeOptions {
   sources?: string[];
   reportPath?: string;
   generatedAt?: () => string;
+  persistTsJobs?: boolean;
+  storeTsJobs?: (
+    jobs: DiscoveryJob[],
+    request: LiveParityRequest,
+  ) => Promise<void> | void;
   executeTsRun?: (options: DiscoveryRunOptions) => Promise<DiscoveryJob[]>;
   executePythonRun?: (request: LiveParityRequest) => Promise<LiveParityEngineSummary>;
 }
@@ -77,7 +84,11 @@ export async function runLiveParitySmoke(
   const executeTsRun =
     options.executeTsRun ??
     (async (runOptions: DiscoveryRunOptions) => {
-      const result = await runDiscovery(runOptions);
+      const result = await runDiscovery(runOptions, {
+        logger: (payload) => {
+          console.log(`[live-smoke] ${JSON.stringify(payload)}`);
+        },
+      });
       return result.jobs;
     });
   const executePythonRun =
@@ -92,6 +103,9 @@ export async function runLiveParitySmoke(
     sources: ["linkedin"],
     careerDiscovery: false,
   });
+  if ((options.persistTsJobs ?? true) && tsJobs.length > 0) {
+    await (options.storeTsJobs ?? persistTsJobsToDatabase)(tsJobs, request);
+  }
   const tsSummary = summarizeDiscoveryJobs(tsJobs, "linkedin");
   const pythonSummary = await executePythonRun(request);
   const report = buildLiveParityReport({
@@ -113,6 +127,21 @@ export async function runLiveParitySmoke(
     report,
     reportPath,
   };
+}
+
+export async function persistTsJobsToDatabase(
+  jobs: DiscoveryJob[],
+  request: LiveParityRequest,
+): Promise<void> {
+  const db = openDatabase();
+  try {
+    new DiscoveryJobsRepo(db).upsertJobs(jobs, {
+      keyword: request.keyword,
+      location: request.location,
+    });
+  } finally {
+    db.close();
+  }
 }
 
 export function buildLiveParityReport(options: {
@@ -162,7 +191,9 @@ export function summarizeDiscoveryJobs(
   jobs: DiscoveryJob[],
   source: string,
 ): LiveParityEngineSummary {
-  const filteredJobs = jobs.filter((job) => job.source === source);
+  const filteredJobs = jobs.filter(
+    (job) => job.source === source && isPrimaryPlatformJob(job, source),
+  );
 
   return {
     totalJobs: filteredJobs.length,
@@ -184,6 +215,33 @@ export function summarizeDiscoveryJobs(
         atsType: job.atsType,
       })),
   };
+}
+
+function isPrimaryPlatformJob(job: DiscoveryJob, source: string): boolean {
+  const url = job.jobUrl || "";
+  if (!url) {
+    return true;
+  }
+
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    if (source === "linkedin") {
+      return hostname.includes("linkedin.com");
+    }
+    if (source === "seek") {
+      return hostname.includes("seek.");
+    }
+    if (source === "indeed") {
+      return hostname.includes("indeed.");
+    }
+    if (source === "jora") {
+      return hostname.includes("jora.");
+    }
+  } catch {
+    return true;
+  }
+
+  return true;
 }
 
 async function runPythonLiveSmoke(

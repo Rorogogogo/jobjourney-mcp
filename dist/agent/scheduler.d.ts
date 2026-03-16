@@ -10,6 +10,7 @@ export declare class AgentScheduler {
     private readonly runScrapeImpl;
     private readonly runDiscoveryImpl;
     constructor(dbPath?: string, deps?: AgentSchedulerDeps);
+    private readonly discoveryLogger;
     reconcile(): void;
     private runScheduledJob;
     runScheduledJobForTest(id: number, keyword: string, location: string, source: string, runMode: string, sources: string | null): Promise<void>;

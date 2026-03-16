@@ -15,6 +15,7 @@ export interface LinkedInGuestJobDetail {
     company: string;
     location: string;
     description: string;
+    salary: string;
     applyUrl: string | null;
     isEasyApply: boolean;
     jobUrl: string;

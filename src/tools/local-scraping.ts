@@ -36,6 +36,9 @@ export function registerLocalScrapingTools(
   const ensureAgentRunningImpl = deps.ensureAgentRunning ?? ensureAgentRunning;
   const loginToSiteImpl = deps.loginToSite ?? loginToSite;
   const hasCookiesImpl = deps.hasCookies ?? hasCookies;
+  const discoveryLogger = (payload: Record<string, unknown>) => {
+    console.log(`[discover] ${JSON.stringify(payload)}`);
+  };
 
   server.addTool({
     name: "scrape_jobs",
@@ -93,6 +96,8 @@ export function registerLocalScrapingTools(
           location: args.location,
           sources: args.sources as any,
           pages: Math.min(args.pages, 30),
+        }, {
+          logger: discoveryLogger,
         });
         const repo = new DiscoveryJobsRepo(db);
         repo.upsertJobs(result.jobs, {
@@ -160,7 +165,8 @@ export function registerLocalScrapingTools(
             `- Company: ${job.company}`,
             `- Location: ${job.location}`,
             `- Source: ${job.source}`,
-            `- Link: ${job.url}`,
+            `- Job URL: ${job.job_url ?? job.url}`,
+            `- External URL: ${job.external_url ?? ""}`,
             `- Scraped: ${job.scraped_at}`,
           ].join("\n")
         );
@@ -296,7 +302,7 @@ export function registerLocalScrapingTools(
 
         const jobs = db
           .prepare(
-            `SELECT title, company, location, source, url, ats_type
+            `SELECT title, company, location, source, COALESCE(job_url, url) AS job_url, external_url, ats_type
              FROM jobs
              WHERE run_id = ?
              ORDER BY rowid ASC
@@ -307,7 +313,8 @@ export function registerLocalScrapingTools(
           company: string;
           location: string;
           source: string;
-          url: string;
+          job_url: string;
+          external_url: string | null;
           ats_type: string | null;
         }>;
 
@@ -318,7 +325,8 @@ export function registerLocalScrapingTools(
             `- Location: ${job.location}`,
             `- Source: ${job.source}`,
             `- ATS: ${job.ats_type ?? "unknown"}`,
-            `- Link: ${job.url}`,
+            `- Job URL: ${job.job_url}`,
+            `- External URL: ${job.external_url ?? ""}`,
           ].join("\n"),
         );
 

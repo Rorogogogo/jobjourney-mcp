@@ -39,6 +39,8 @@ export interface RunLiveParitySmokeOptions {
     sources?: string[];
     reportPath?: string;
     generatedAt?: () => string;
+    persistTsJobs?: boolean;
+    storeTsJobs?: (jobs: DiscoveryJob[], request: LiveParityRequest) => Promise<void> | void;
     executeTsRun?: (options: DiscoveryRunOptions) => Promise<DiscoveryJob[]>;
     executePythonRun?: (request: LiveParityRequest) => Promise<LiveParityEngineSummary>;
 }
@@ -47,6 +49,7 @@ export interface LiveParitySmokeResult {
     reportPath: string;
 }
 export declare function runLiveParitySmoke(options?: RunLiveParitySmokeOptions): Promise<LiveParitySmokeResult>;
+export declare function persistTsJobsToDatabase(jobs: DiscoveryJob[], request: LiveParityRequest): Promise<void>;
 export declare function buildLiveParityReport(options: {
     generatedAt: string;
     request: LiveParityRequest;

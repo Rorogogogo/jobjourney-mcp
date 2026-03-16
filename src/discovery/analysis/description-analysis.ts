@@ -267,15 +267,29 @@ export function detectExperienceLevel(text: string): ExperienceLevelResult {
 
 export function extractExperienceYears(text: string): number | null {
   const patterns = [
-    /\b(\d+)(?:\+)?\s*(?:-\s*\d+(?:\+)?)?\s+years?(?:\s+of)?\s+experience\b/i,
-    /\bexperience\s+of\s+(\d+)(?:\+)?\s*(?:-\s*\d+(?:\+)?)?\s+years?\b/i,
-    /\b(\d+)(?:\+)?\s*(?:-\s*\d+(?:\+)?)?\s+years?\s+(?:in|with|building|developing|working)\b/i,
+    /\b(?:at\s+least|minimum(?:\s+of)?|min\.?|more\s+than|over)\s+(\d+)(?:\+)?\s*(?:-\s*\d+(?:\+)?)?\s+years?(?:['’]s?)?(?:\s+of)?(?:\s+[a-z-]+){0,4}\s+experience\b/gi,
+    /\b(\d+)(?:\+)?\s*(?:-\s*\d+(?:\+)?)?\s+years?(?:['’]s?)?(?:\s+of)?(?:\s+[a-z-]+){0,4}\s+experience\b/gi,
+    /\bexperience\s+of\s+(\d+)(?:\+)?\s*(?:-\s*\d+(?:\+)?)?\s+years?\b/gi,
+    /\b(\d+)(?:\+)?\s*(?:-\s*\d+(?:\+)?)?\s+years?(?:['’]s?)?\s+(?:in|with|building|developing|working|designing|leading|managing|shipping)\b/gi,
   ];
 
   for (const pattern of patterns) {
-    const match = pattern.exec(text);
-    if (match) {
-      return Number.parseInt(match[1], 10);
+    for (const match of text.matchAll(pattern)) {
+      const years = Number.parseInt(match[1], 10);
+      if (!Number.isFinite(years)) {
+        continue;
+      }
+
+      const matchIndex = match.index ?? 0;
+      const contextStart = Math.max(0, matchIndex - 80);
+      const contextEnd = Math.min(text.length, matchIndex + match[0].length + 80);
+      const context = text.slice(contextStart, contextEnd).toLowerCase();
+
+      if (looksLikeCompanyHistoryContext(context)) {
+        continue;
+      }
+
+      return years;
     }
   }
 
@@ -318,4 +332,16 @@ export function analyzeJobDescription(text: string): JobAnalysisResult {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function looksLikeCompanyHistoryContext(context: string): boolean {
+  return [
+    /\bfor\s+over\s+\d+\s+years\b/,
+    /\bfor\s+more\s+than\s+\d+\s+years\b/,
+    /\bour\s+company\s+has\b/,
+    /\bwe\s+have\s+\w+/,
+    /\b(?:company|business|organisation|organization|firm|startup)\s+has\b/,
+    /\bserving\s+(?:customers|clients|businesses)\b/,
+    /\bcustomers\s+worldwide\b/,
+  ].some((pattern) => pattern.test(context));
 }

@@ -18,6 +18,9 @@ export function registerLocalScrapingTools(server, deps = {}) {
     const ensureAgentRunningImpl = deps.ensureAgentRunning ?? ensureAgentRunning;
     const loginToSiteImpl = deps.loginToSite ?? loginToSite;
     const hasCookiesImpl = deps.hasCookies ?? hasCookies;
+    const discoveryLogger = (payload) => {
+        console.log(`[discover] ${JSON.stringify(payload)}`);
+    };
     server.addTool({
         name: "scrape_jobs",
         description: "Run a one-off local job scrape using Playwright. Scrapes job listings from the specified source and stores them locally in SQLite. Returns results as Markdown.",
@@ -69,6 +72,8 @@ export function registerLocalScrapingTools(server, deps = {}) {
                     location: args.location,
                     sources: args.sources,
                     pages: Math.min(args.pages, 30),
+                }, {
+                    logger: discoveryLogger,
                 });
                 const repo = new DiscoveryJobsRepo(db);
                 repo.upsertJobs(result.jobs, {
@@ -127,7 +132,8 @@ export function registerLocalScrapingTools(server, deps = {}) {
                     `- Company: ${job.company}`,
                     `- Location: ${job.location}`,
                     `- Source: ${job.source}`,
-                    `- Link: ${job.url}`,
+                    `- Job URL: ${job.job_url ?? job.url}`,
+                    `- External URL: ${job.external_url ?? ""}`,
                     `- Scraped: ${job.scraped_at}`,
                 ].join("\n"));
                 return [`# Search Results (${jobs.length} jobs)`, "", ...lines].join("\n\n");
@@ -244,7 +250,7 @@ export function registerLocalScrapingTools(server, deps = {}) {
                     return "No discovery runs found. Run discover_jobs or schedule_discovery first.";
                 }
                 const jobs = db
-                    .prepare(`SELECT title, company, location, source, url, ats_type
+                    .prepare(`SELECT title, company, location, source, COALESCE(job_url, url) AS job_url, external_url, ats_type
              FROM jobs
              WHERE run_id = ?
              ORDER BY rowid ASC
@@ -256,7 +262,8 @@ export function registerLocalScrapingTools(server, deps = {}) {
                     `- Location: ${job.location}`,
                     `- Source: ${job.source}`,
                     `- ATS: ${job.ats_type ?? "unknown"}`,
-                    `- Link: ${job.url}`,
+                    `- Job URL: ${job.job_url}`,
+                    `- External URL: ${job.external_url ?? ""}`,
                 ].join("\n"));
                 return [
                     "# Latest Discovery Run",

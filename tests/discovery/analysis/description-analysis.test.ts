@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { analyzeJobDescription } from "../../../src/discovery/analysis/description-analysis.js";
+import {
+  analyzeJobDescription,
+  extractExperienceYears,
+} from "../../../src/discovery/analysis/description-analysis.js";
 
 describe("analyzeJobDescription", () => {
   it("analyzes work type, experience, tech stack, and PR requirements", () => {
@@ -39,5 +42,45 @@ describe("analyzeJobDescription", () => {
 
     expect(result.experienceLevel.level).toBe("senior");
     expect(result.experienceLevel.years).toBeNull();
+  });
+
+  it("extracts years from explicit minimum requirement phrasing", () => {
+    expect(
+      extractExperienceYears(`
+        You bring a minimum of 4 years of professional software engineering experience.
+      `),
+    ).toBe(4);
+  });
+
+  it("extracts years from at-least phrasing", () => {
+    expect(
+      extractExperienceYears(`
+        Candidates should have at least 6 years' experience building distributed systems.
+      `),
+    ).toBe(6);
+  });
+
+  it("extracts the lower bound from year ranges", () => {
+    expect(
+      extractExperienceYears(`
+        We are looking for engineers with 7-10 years of experience in backend platforms.
+      `),
+    ).toBe(7);
+  });
+
+  it("extracts years from plus-suffix phrasing", () => {
+    expect(
+      extractExperienceYears(`
+        Required: 3+ years experience with React and TypeScript in production environments.
+      `),
+    ).toBe(3);
+  });
+
+  it("ignores non-candidate year statements even when they look numeric", () => {
+    expect(
+      extractExperienceYears(`
+        Our company has over 25 years of experience delivering software to enterprise customers.
+      `),
+    ).toBeNull();
   });
 });

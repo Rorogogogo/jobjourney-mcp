@@ -38,6 +38,7 @@ export async function runDiscovery(
   dependencies: RunDiscoveryDependencies = {},
 ): Promise<DiscoveryRunResult> {
   const selectedSources = options.sources ?? getActiveDiscoverySourceNames();
+  const logger = dependencies.logger;
   const httpClient =
     dependencies.httpClient ??
     new HttpClient({
@@ -82,6 +83,14 @@ export async function runDiscovery(
       continue;
     }
 
+    logger?.({
+      event: "discovery_source_start",
+      source: sourceName,
+      keyword: options.keyword,
+      location: options.location,
+      pages: options.pages ?? 30,
+    });
+
     try {
       const source = factory();
       const discoveredJobs = await source.discoverJobs({
@@ -91,6 +100,11 @@ export async function runDiscovery(
         extractedAt: extractedAtFactory(),
       });
       successfulSources.push(sourceName);
+      logger?.({
+        event: "discovery_source_success",
+        source: sourceName,
+        discoveredJobs: discoveredJobs.length,
+      });
 
       for (const job of discoveredJobs) {
         const enriched = enrichDiscoveryJob(
@@ -99,7 +113,7 @@ export async function runDiscovery(
             options,
             careerDiscoverer,
             careerDiscoveryCache,
-            dependencies.logger,
+            logger,
           ),
         );
         pushJob(jobs, seenJobs, enriched);
@@ -120,19 +134,47 @@ export async function runDiscovery(
 
         expandedCompanyKeys.add(companyKey);
         expandedCompanies.push(companyKey);
+        logger?.({
+          event: "discovery_ats_expand_start",
+          source: enriched.source,
+          atsType: enriched.atsType,
+          companyIdentifier: enriched.atsIdentifier,
+        });
         const atsJobs = await crawlerFactory().crawlJobs(
           enriched.atsIdentifier,
           extractedAtFactory(),
         );
+        logger?.({
+          event: "discovery_ats_expand_success",
+          source: enriched.source,
+          atsType: enriched.atsType,
+          companyIdentifier: enriched.atsIdentifier,
+          discoveredJobs: atsJobs.length,
+        });
         for (const atsJob of atsJobs) {
+          atsJob.source = enriched.source;
+          atsJob.atsType = enriched.atsType;
+          atsJob.atsIdentifier = enriched.atsIdentifier;
           pushJob(jobs, seenJobs, enrichDiscoveryJob(applyAtsDetection(atsJob)));
         }
       }
-    } catch {
+    } catch (error) {
+      logger?.({
+        event: "discovery_source_error",
+        source: sourceName,
+        error: error instanceof Error ? error.message : String(error),
+      });
       failedSources.push(sourceName);
     }
   }
 
+  logger?.({
+    event: "discovery_run_complete",
+    successfulSources,
+    failedSources,
+    totalJobs: jobs.length,
+    expandedCompanies,
+  });
   return {
     jobs,
     sources: successfulSources,
@@ -217,7 +259,7 @@ async function maybeApplyCareerDiscovery(
     const result = (await getCachedCareerDiscoveryResult({
       cache,
       companyName: job.company,
-      location: job.location,
+      location: [job.location, options.location].filter(Boolean).join(" "),
       atsType: job.atsType,
       careerDiscoverer,
       logger,
