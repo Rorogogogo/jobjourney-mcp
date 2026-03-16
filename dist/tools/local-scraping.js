@@ -3,9 +3,21 @@ import { runScrape, getAvailableSources } from "../scraper/core/run-scrape.js";
 import { openDatabase } from "../storage/sqlite/db.js";
 import { JobsRepo } from "../storage/sqlite/jobs-repo.js";
 import { SchedulesRepo } from "../storage/sqlite/schedules-repo.js";
+import { ScrapeRunsRepo } from "../storage/sqlite/scrape-runs-repo.js";
 import { ensureAgentRunning } from "../agent/process.js";
 import { loginToSite, hasCookies } from "../scraper/core/browser.js";
-export function registerLocalScrapingTools(server) {
+import { runDiscovery } from "../discovery/core/run-discovery.js";
+import { getActiveDiscoverySourceNames } from "../discovery/sources/registry.js";
+import { DiscoveryJobsRepo } from "../discovery/storage/discovery-jobs-repo.js";
+export function registerLocalScrapingTools(server, deps = {}) {
+    const runScrapeImpl = deps.runScrape ?? runScrape;
+    const getAvailableSourcesImpl = deps.getAvailableSources ?? getAvailableSources;
+    const runDiscoveryImpl = deps.runDiscovery ?? runDiscovery;
+    const getActiveDiscoverySourceNamesImpl = deps.getActiveDiscoverySourceNames ?? getActiveDiscoverySourceNames;
+    const openDatabaseImpl = deps.openDatabase ?? openDatabase;
+    const ensureAgentRunningImpl = deps.ensureAgentRunning ?? ensureAgentRunning;
+    const loginToSiteImpl = deps.loginToSite ?? loginToSite;
+    const hasCookiesImpl = deps.hasCookies ?? hasCookies;
     server.addTool({
         name: "scrape_jobs",
         description: "Run a one-off local job scrape using Playwright. Scrapes job listings from the specified source and stores them locally in SQLite. Returns results as Markdown.",
@@ -16,7 +28,7 @@ export function registerLocalScrapingTools(server) {
                 .string()
                 .optional()
                 .default("seek")
-                .describe(`Job source to scrape. Available: ${getAvailableSources().join(", ")}`),
+                .describe(`Job source to scrape. Available: ${getAvailableSourcesImpl().join(", ")}`),
             maxPages: z
                 .number()
                 .optional()
@@ -24,13 +36,68 @@ export function registerLocalScrapingTools(server) {
                 .describe("Number of pages to scrape (default 1, max 30)"),
         }),
         execute: async (args) => {
-            const result = await runScrape({
+            const result = await runScrapeImpl({
                 keyword: args.keyword,
                 location: args.location,
                 source: args.source,
                 maxPages: Math.min(args.maxPages, 30),
             });
             return result.markdown;
+        },
+    });
+    server.addTool({
+        name: "discover_jobs",
+        description: "Run the new multi-source discovery engine. Discovers jobs across enabled sources, enriches them, expands supported ATS providers, stores them locally in SQLite, and returns a structured JSON summary.",
+        parameters: z.object({
+            keyword: z.string().describe("Job search keyword, e.g. 'full stack'"),
+            location: z.string().describe("Job location, e.g. 'Sydney'"),
+            sources: z
+                .array(z.string())
+                .optional()
+                .describe(`Discovery sources to run. Defaults to active sources: ${getActiveDiscoverySourceNamesImpl().join(", ")}`),
+            pages: z
+                .number()
+                .optional()
+                .default(30)
+                .describe("Number of pages to fetch per source (default 30, max 30)"),
+        }),
+        execute: async (args) => {
+            const db = openDatabaseImpl();
+            try {
+                const result = await runDiscoveryImpl({
+                    keyword: args.keyword,
+                    location: args.location,
+                    sources: args.sources,
+                    pages: Math.min(args.pages, 30),
+                });
+                const repo = new DiscoveryJobsRepo(db);
+                repo.upsertJobs(result.jobs, {
+                    keyword: args.keyword,
+                    location: args.location,
+                });
+                return JSON.stringify({
+                    keyword: args.keyword,
+                    location: args.location,
+                    totalJobs: result.jobs.length,
+                    successfulSources: result.sources,
+                    failedSources: result.failedSources,
+                    expandedCompanies: result.expandedCompanies,
+                    jobs: result.jobs.map((job) => ({
+                        id: job.id,
+                        title: job.title,
+                        company: job.company,
+                        location: job.location,
+                        source: job.source,
+                        jobUrl: job.jobUrl,
+                        externalUrl: job.externalUrl,
+                        atsType: job.atsType,
+                        postedAt: job.postedAt,
+                    })),
+                }, null, 2);
+            }
+            finally {
+                db.close();
+            }
         },
     });
     server.addTool({
@@ -43,7 +110,7 @@ export function registerLocalScrapingTools(server) {
             limit: z.number().optional().default(20).describe("Max results to return (default 20)"),
         }),
         execute: async (args) => {
-            const db = openDatabase();
+            const db = openDatabaseImpl();
             try {
                 const repo = new JobsRepo(db);
                 const jobs = repo.search({
@@ -83,7 +150,7 @@ export function registerLocalScrapingTools(server) {
                 .string()
                 .optional()
                 .default("seek")
-                .describe(`Job source. Available: ${getAvailableSources().join(", ")}`),
+                .describe(`Job source. Available: ${getAvailableSourcesImpl().join(", ")}`),
         }),
         execute: async (args) => {
             const [hourStr, minuteStr] = args.time.split(":");
@@ -93,7 +160,7 @@ export function registerLocalScrapingTools(server) {
                 return `Invalid time format: ${args.time}. Use HH:mm (e.g. '09:00').`;
             }
             const cronExpr = `${minute} ${hour} * * *`;
-            const db = openDatabase();
+            const db = openDatabaseImpl();
             try {
                 const repo = new SchedulesRepo(db);
                 const schedule = repo.create({
@@ -102,13 +169,109 @@ export function registerLocalScrapingTools(server) {
                     source: args.source,
                     cron: cronExpr,
                 });
-                ensureAgentRunning();
+                ensureAgentRunningImpl();
                 return [
                     `Scheduled "${args.keyword}" in ${args.location} (${args.source}) every day at ${args.time}.`,
                     `Schedule ID: ${schedule.id}`,
                     `Cron: ${cronExpr}`,
                     `The jobjourney-agent background process will execute this automatically.`,
                 ].join("\n");
+            }
+            finally {
+                db.close();
+            }
+        },
+    });
+    server.addTool({
+        name: "schedule_discovery",
+        description: "Schedule recurring multi-source discovery. The jobjourney-agent will run the TS discovery engine daily at the requested time and store results locally.",
+        parameters: z.object({
+            keyword: z.string().describe("Job search keyword, e.g. 'full stack'"),
+            location: z.string().describe("Job location, e.g. 'Sydney'"),
+            time: z.string().describe("Daily time to run in HH:mm format, e.g. '09:00'"),
+            sources: z
+                .array(z.string())
+                .optional()
+                .describe(`Discovery sources to run. Defaults to active sources: ${getActiveDiscoverySourceNamesImpl().join(", ")}`),
+        }),
+        execute: async (args) => {
+            const [hourStr, minuteStr] = args.time.split(":");
+            const hour = parseInt(hourStr, 10);
+            const minute = parseInt(minuteStr, 10);
+            if (isNaN(hour) || isNaN(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+                return `Invalid time format: ${args.time}. Use HH:mm (e.g. '09:00').`;
+            }
+            const cronExpr = `${minute} ${hour} * * *`;
+            const selectedSources = args.sources?.length
+                ? args.sources
+                : getActiveDiscoverySourceNamesImpl();
+            const sourceList = selectedSources.join(",");
+            const db = openDatabaseImpl();
+            try {
+                const repo = new SchedulesRepo(db);
+                const schedule = repo.create({
+                    keyword: args.keyword,
+                    location: args.location,
+                    source: "discover",
+                    sources: sourceList,
+                    runMode: "discover",
+                    cron: cronExpr,
+                });
+                ensureAgentRunningImpl();
+                return [
+                    `Scheduled discovery for "${args.keyword}" in ${args.location} every day at ${args.time}.`,
+                    `Sources: ${selectedSources.join(", ")}`,
+                    `Schedule ID: ${schedule.id}`,
+                    `Cron: ${cronExpr}`,
+                    `The jobjourney-agent background process will execute this automatically.`,
+                ].join("\n");
+            }
+            finally {
+                db.close();
+            }
+        },
+    });
+    server.addTool({
+        name: "get_latest_discovery_report",
+        description: "Show a summary of the most recent discovery run, including sources, job count, and the top stored jobs for that run.",
+        parameters: z.object({}),
+        execute: async () => {
+            const db = openDatabaseImpl();
+            try {
+                const runsRepo = new ScrapeRunsRepo(db);
+                const latestRun = runsRepo.getLatestDiscoveryRun();
+                if (!latestRun) {
+                    return "No discovery runs found. Run discover_jobs or schedule_discovery first.";
+                }
+                const jobs = db
+                    .prepare(`SELECT title, company, location, source, url, ats_type
+             FROM jobs
+             WHERE run_id = ?
+             ORDER BY rowid ASC
+             LIMIT 10`)
+                    .all(latestRun.id);
+                const lines = jobs.map((job) => [
+                    `## ${job.title}`,
+                    `- Company: ${job.company}`,
+                    `- Location: ${job.location}`,
+                    `- Source: ${job.source}`,
+                    `- ATS: ${job.ats_type ?? "unknown"}`,
+                    `- Link: ${job.url}`,
+                ].join("\n"));
+                return [
+                    "# Latest Discovery Run",
+                    `- Keyword: ${latestRun.keyword}`,
+                    `- Location: ${latestRun.location}`,
+                    `- Sources: ${(latestRun.sources ?? latestRun.source).split(",").join(", ")}`,
+                    `- Status: ${latestRun.status}`,
+                    `- Job count: ${latestRun.job_count ?? 0}`,
+                    `- Started: ${latestRun.started_at}`,
+                    latestRun.finished_at ? `- Finished: ${latestRun.finished_at}` : "",
+                    "",
+                    ...lines,
+                ]
+                    .filter(Boolean)
+                    .join("\n\n");
             }
             finally {
                 db.close();
@@ -124,7 +287,7 @@ export function registerLocalScrapingTools(server) {
                 .describe("Job site to log in to: 'seek' or 'linkedin'"),
         }),
         execute: async (args) => {
-            return await loginToSite(args.site);
+            return await loginToSiteImpl(args.site);
         },
     });
     server.addTool({
@@ -133,7 +296,7 @@ export function registerLocalScrapingTools(server) {
         parameters: z.object({}),
         execute: async () => {
             const sites = ["seek", "linkedin"];
-            const status = sites.map((s) => `- ${s}: ${hasCookies(s) ? "logged in (cookies saved)" : "not logged in"}`);
+            const status = sites.map((s) => `- ${s}: ${hasCookiesImpl(s) ? "logged in (cookies saved)" : "not logged in"}`);
             return ["# Login Status", "", ...status].join("\n");
         },
     });

@@ -2,6 +2,7 @@ import { createEmptyDiscoveryJob } from "../core/types.js";
 const GREENHOUSE_JOBS_URL = "https://boards-api.greenhouse.io/v1/boards/{company}/jobs";
 export class GreenhouseCrawler {
     httpClient;
+    name = "greenhouse";
     atsType = "greenhouse";
     constructor(httpClient) {
         this.httpClient = httpClient;

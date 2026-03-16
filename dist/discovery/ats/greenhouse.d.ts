@@ -20,6 +20,7 @@ interface GreenhousePayload {
 }
 export declare class GreenhouseCrawler {
     private readonly httpClient;
+    readonly name: "greenhouse";
     readonly atsType = "greenhouse";
     constructor(httpClient: HttpClient);
     crawlJobs(companyIdentifier: string, extractedAt: string): Promise<DiscoveryJob[]>;

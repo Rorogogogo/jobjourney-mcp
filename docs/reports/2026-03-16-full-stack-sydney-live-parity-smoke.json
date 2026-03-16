@@ -1,0 +1,89 @@
+{
+  "generatedAt": "2026-03-16T10:04:31.338Z",
+  "request": {
+    "keyword": "full stack",
+    "location": "Sydney",
+    "pages": 1,
+    "minDelay": 1.2,
+    "maxDelay": 1.8,
+    "sources": [
+      "linkedin"
+    ]
+  },
+  "status": "diverged",
+  "differences": [
+    "externalUrlCount",
+    "atsBreakdown",
+    "externalJobs"
+  ],
+  "ts": {
+    "totalJobs": 10,
+    "postedAtCount": 10,
+    "externalUrlCount": 1,
+    "atsBreakdown": {
+      "unknown": 6,
+      "lever": 1,
+      "linkedin_easy_apply": 3
+    },
+    "firstJobIds": [
+      "4260005713",
+      "4377425714",
+      "4375394914",
+      "4359385154",
+      "4331692681",
+      "4369410943",
+      "4384955640",
+      "4371459158",
+      "4378477066",
+      "4374930759"
+    ],
+    "externalJobs": [
+      {
+        "jobId": "4377425714",
+        "title": "Full Stack Engineer",
+        "company": "Spotify",
+        "externalUrl": "https://jobs.lever.co/spotify/74c04c1a-afe8-4616-be68-ae452daed595?lever-source=LinkedInJobs",
+        "atsType": "lever"
+      }
+    ]
+  },
+  "python": {
+    "totalJobs": 10,
+    "postedAtCount": 10,
+    "externalUrlCount": 2,
+    "atsBreakdown": {
+      "ashby": 1,
+      "lever": 1,
+      "linkedin_easy_apply": 3,
+      "unknown": 5
+    },
+    "firstJobIds": [
+      "4260005713",
+      "4377425714",
+      "4375394914",
+      "4359385154",
+      "4331692681",
+      "4369410943",
+      "4384955640",
+      "4371459158",
+      "4378477066",
+      "4374930759"
+    ],
+    "externalJobs": [
+      {
+        "jobId": "4377425714",
+        "title": "Full Stack Engineer",
+        "company": "Spotify",
+        "externalUrl": "https://jobs.lever.co/spotify/74c04c1a-afe8-4616-be68-ae452daed595?lever-source=LinkedInJobs",
+        "atsType": "lever"
+      },
+      {
+        "jobId": "4369410943",
+        "title": "Software Engineer (Fullstack)",
+        "company": "Heidi",
+        "externalUrl": "https://jobs.ashbyhq.com/heidihealth.com.au/dd3e7c68-c983-4179-9d73-96f17154e718/application?utm_source=wWVW2gV3nl",
+        "atsType": "ashby"
+      }
+    ]
+  }
+}

@@ -3,6 +3,8 @@ export interface ScheduleInput {
     keyword: string;
     location: string;
     source: string;
+    runMode?: "scrape" | "discover";
+    sources?: string | null;
     cron: string;
 }
 export interface CreatedSchedule extends ScheduleInput {
@@ -14,6 +16,8 @@ export interface ScheduleRow {
     keyword: string;
     location: string;
     source: string;
+    run_mode: string;
+    sources: string | null;
     cron: string;
     created_at: string;
     updated_at: string | null;

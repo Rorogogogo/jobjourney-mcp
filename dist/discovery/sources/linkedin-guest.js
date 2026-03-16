@@ -1,5 +1,74 @@
 import { DOMAIN_MAP, extractKnownAtsUrls, normalizeAtsUrlCandidate, unwrapLinkedInRedirect, } from "../ats/detector.js";
+import { detectAts } from "../ats/detector.js";
+import { createEmptyDiscoveryJob } from "../core/types.js";
 const JOB_URN_PATTERN = /urn:li:jobPosting:(\d+)/i;
+const LINKEDIN_SEARCH_URL = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search";
+const LINKEDIN_JOB_DETAIL_URL = "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{jobId}";
+export class LinkedInGuestSource {
+    httpClient;
+    name = "linkedin";
+    constructor(httpClient) {
+        this.httpClient = httpClient;
+    }
+    async discoverJobs(request) {
+        const jobs = [];
+        for (let pageIndex = 0; pageIndex < request.pages; pageIndex += 1) {
+            const html = await this.httpClient.getText(LINKEDIN_SEARCH_URL, {
+                params: {
+                    keywords: request.keyword,
+                    location: request.location,
+                    start: String(pageIndex * 25),
+                },
+            });
+            const cards = parseLinkedInGuestSearchResults(html);
+            if (cards.length === 0) {
+                break;
+            }
+            for (const card of cards) {
+                try {
+                    const detailHtml = await this.httpClient.getText(LINKEDIN_JOB_DETAIL_URL.replace("{jobId}", card.jobId));
+                    const detail = parseLinkedInGuestJobDetail(detailHtml, {
+                        jobId: card.jobId,
+                        jobUrl: card.jobUrl,
+                    });
+                    const detection = detectAts(detail.applyUrl, {
+                        easyApply: detail.isEasyApply,
+                    });
+                    const job = createEmptyDiscoveryJob({
+                        id: detail.jobId,
+                        source: "linkedin",
+                        title: detail.title || card.title,
+                        company: detail.company || card.company,
+                        location: detail.location || card.location,
+                        description: detail.description,
+                        jobUrl: detail.jobUrl || card.jobUrl,
+                        postedAt: card.postedAt,
+                        extractedAt: request.extractedAt,
+                    });
+                    job.externalUrl = detection.applyUrl || "";
+                    job.atsType = detection.atsType;
+                    job.atsIdentifier = detection.companyIdentifier || "";
+                    job.applicantCount = detail.applicantCount;
+                    jobs.push(job);
+                }
+                catch {
+                    jobs.push(createEmptyDiscoveryJob({
+                        id: card.jobId,
+                        source: "linkedin",
+                        title: card.title,
+                        company: card.company,
+                        location: card.location,
+                        description: "",
+                        jobUrl: card.jobUrl,
+                        postedAt: card.postedAt,
+                        extractedAt: request.extractedAt,
+                    }));
+                }
+            }
+        }
+        return jobs;
+    }
+}
 export function parseLinkedInGuestSearchResults(html) {
     const indices = [...html.matchAll(/data-entity-urn=(['"])(urn:li:jobPosting:\d+)\1/gi)]
         .map((match) => ({

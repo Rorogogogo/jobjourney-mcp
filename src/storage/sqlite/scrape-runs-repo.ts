@@ -5,6 +5,8 @@ export interface CreateRunInput {
   keyword: string;
   location: string;
   source: string;
+  runMode?: "scrape" | "discover";
+  sources?: string | null;
 }
 
 export interface FinishRunInput {
@@ -18,6 +20,8 @@ interface CreateRunParams {
   keyword: string;
   location: string;
   source: string;
+  runMode: "scrape" | "discover";
+  sources: string | null;
 }
 
 interface FinishRunParams {
@@ -38,6 +42,8 @@ export class ScrapeRunsRepo {
           keyword,
           location,
           source,
+          run_mode,
+          sources,
           status,
           started_at
         )
@@ -46,6 +52,8 @@ export class ScrapeRunsRepo {
           @keyword,
           @location,
           @source,
+          @runMode,
+          @sources,
           'running',
           datetime('now')
         )
@@ -55,6 +63,8 @@ export class ScrapeRunsRepo {
         keyword: run.keyword,
         location: run.location,
         source: run.source,
+        runMode: run.runMode ?? "scrape",
+        sources: run.sources ?? null,
       });
 
     return { id: Number(result.lastInsertRowid) };
@@ -77,5 +87,45 @@ export class ScrapeRunsRepo {
         jobCount: result.jobCount ?? null,
         error: result.error ?? null,
       });
+  }
+
+  getLatestDiscoveryRun(): {
+    id: number;
+    keyword: string;
+    location: string;
+    source: string;
+    run_mode: string;
+    sources: string | null;
+    status: string;
+    started_at: string;
+    finished_at: string | null;
+    job_count: number | null;
+    error: string | null;
+  } | null {
+    return (
+      this.db
+        .prepare(
+          `SELECT id, keyword, location, source, run_mode, sources, status, started_at, finished_at, job_count, error
+           FROM scrape_runs
+           WHERE run_mode = 'discover'
+           ORDER BY id DESC
+           LIMIT 1`,
+        )
+        .get() as
+        | {
+            id: number;
+            keyword: string;
+            location: string;
+            source: string;
+            run_mode: string;
+            sources: string | null;
+            status: string;
+            started_at: string;
+            finished_at: string | null;
+            job_count: number | null;
+            error: string | null;
+          }
+        | undefined
+    ) ?? null;
   }
 }

@@ -26,6 +26,7 @@ interface LeverJobItem {
 }
 
 export class LeverCrawler {
+  readonly name = "lever" as const;
   readonly atsType = "lever";
 
   constructor(private readonly httpClient: HttpClient) {}

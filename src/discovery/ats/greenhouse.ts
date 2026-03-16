@@ -19,6 +19,7 @@ interface GreenhousePayload {
 }
 
 export class GreenhouseCrawler {
+  readonly name = "greenhouse" as const;
   readonly atsType = "greenhouse";
 
   constructor(private readonly httpClient: HttpClient) {}

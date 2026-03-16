@@ -7,5 +7,7 @@ export interface DiscoverySourceDefinition {
     status: DiscoverySourceStatus;
 }
 export declare const DISCOVERY_SOURCE_NAMES: DiscoverySourceName[];
+export declare const ACTIVE_DISCOVERY_SOURCE_NAMES: DiscoverySourceName[];
 export declare function getDiscoverySourceDefinition(name: DiscoverySourceName): DiscoverySourceDefinition;
 export declare function getAllDiscoverySourceDefinitions(): ReadonlyArray<DiscoverySourceDefinition>;
+export declare function getActiveDiscoverySourceNames(): DiscoverySourceName[];

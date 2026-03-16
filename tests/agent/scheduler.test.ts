@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { AgentScheduler } from "../../src/agent/scheduler.js";
 import { openDatabase } from "../../src/storage/sqlite/db.js";
 import { SchedulesRepo } from "../../src/storage/sqlite/schedules-repo.js";
@@ -72,6 +72,48 @@ describe("AgentScheduler", () => {
 
     scheduler.reconcile();
     expect(scheduler.activeCount).toBe(0);
+    scheduler.stop();
+  });
+
+  it("runs discovery schedules through the discovery pipeline", async () => {
+    const db = openDatabase(dbPath);
+    const repo = new SchedulesRepo(db);
+    const schedule = repo.create({
+      keyword: "full stack",
+      location: "Sydney",
+      source: "discover",
+      sources: "linkedin,seek",
+      runMode: "discover",
+      cron: "0 9 * * *",
+    });
+    db.close();
+
+    const runDiscovery = vi.fn(async () => ({
+      jobs: [],
+      sources: ["linkedin", "seek"],
+      failedSources: [],
+      expandedCompanies: [],
+    }));
+    const scheduler = new AgentScheduler(dbPath, {
+      runScrape: vi.fn(async () => ({ jobs: [], markdown: "", runId: 1 })),
+      runDiscovery,
+    });
+
+    await scheduler.runScheduledJobForTest(
+      schedule.id,
+      schedule.keyword,
+      schedule.location,
+      schedule.source,
+      schedule.runMode,
+      schedule.sources,
+    );
+
+    expect(runDiscovery).toHaveBeenCalledWith({
+      keyword: "full stack",
+      location: "Sydney",
+      sources: ["linkedin", "seek"],
+      pages: 30,
+    });
     scheduler.stop();
   });
 });

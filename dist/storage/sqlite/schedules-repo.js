@@ -6,10 +6,14 @@ export class SchedulesRepo {
     create(schedule) {
         const result = this.db
             .prepare(`
-        INSERT INTO schedules (keyword, location, source, cron, created_at)
-        VALUES (@keyword, @location, @source, @cron, datetime('now'))
+        INSERT INTO schedules (keyword, location, source, run_mode, sources, cron, created_at, updated_at)
+        VALUES (@keyword, @location, @source, @runMode, @sources, @cron, datetime('now'), datetime('now'))
       `)
-            .run(schedule);
+            .run({
+            ...schedule,
+            runMode: schedule.runMode ?? "scrape",
+            sources: schedule.sources ?? undefined,
+        });
         const id = Number(result.lastInsertRowid);
         const row = this.db
             .prepare(`
@@ -24,6 +28,8 @@ export class SchedulesRepo {
         return {
             id,
             ...schedule,
+            runMode: schedule.runMode ?? "scrape",
+            sources: schedule.sources ?? undefined,
             createdAt: row.created_at,
         };
     }
@@ -31,7 +37,7 @@ export class SchedulesRepo {
         if (enabledOnly) {
             return this.db
                 .prepare(`
-          SELECT id, keyword, location, source, cron, created_at, updated_at, last_run_at, enabled
+          SELECT id, keyword, location, source, run_mode, sources, cron, created_at, updated_at, last_run_at, enabled
           FROM schedules
           WHERE enabled = 1
           ORDER BY created_at DESC
@@ -40,7 +46,7 @@ export class SchedulesRepo {
         }
         return this.db
             .prepare(`
-        SELECT id, keyword, location, source, cron, created_at, updated_at, last_run_at, enabled
+        SELECT id, keyword, location, source, run_mode, sources, cron, created_at, updated_at, last_run_at, enabled
         FROM schedules
         ORDER BY created_at DESC
       `)

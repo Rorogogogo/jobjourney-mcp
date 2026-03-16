@@ -2,6 +2,7 @@ import { createEmptyDiscoveryJob } from "../core/types.js";
 const LEVER_JOBS_URL = "https://api.lever.co/v0/postings/{company}";
 export class LeverCrawler {
     httpClient;
+    name = "lever";
     atsType = "lever";
     constructor(httpClient) {
         this.httpClient = httpClient;

@@ -5,6 +5,7 @@ const DISCOVERY_SOURCE_DEFINITIONS = [
     { name: "jora", transport: "browser", status: "planned" },
 ];
 export const DISCOVERY_SOURCE_NAMES = DISCOVERY_SOURCE_DEFINITIONS.map((definition) => definition.name);
+export const ACTIVE_DISCOVERY_SOURCE_NAMES = DISCOVERY_SOURCE_DEFINITIONS.filter((definition) => definition.status === "active").map((definition) => definition.name);
 export function getDiscoverySourceDefinition(name) {
     const definition = DISCOVERY_SOURCE_DEFINITIONS.find((candidate) => candidate.name === name);
     if (!definition) {
@@ -14,4 +15,7 @@ export function getDiscoverySourceDefinition(name) {
 }
 export function getAllDiscoverySourceDefinitions() {
     return DISCOVERY_SOURCE_DEFINITIONS;
+}
+export function getActiveDiscoverySourceNames() {
+    return [...ACTIVE_DISCOVERY_SOURCE_NAMES];
 }

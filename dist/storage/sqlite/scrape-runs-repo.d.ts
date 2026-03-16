@@ -4,6 +4,8 @@ export interface CreateRunInput {
     keyword: string;
     location: string;
     source: string;
+    runMode?: "scrape" | "discover";
+    sources?: string | null;
 }
 export interface FinishRunInput {
     status: "success" | "error";
@@ -17,4 +19,17 @@ export declare class ScrapeRunsRepo {
         id: number;
     };
     finishRun(id: number, result: FinishRunInput): void;
+    getLatestDiscoveryRun(): {
+        id: number;
+        keyword: string;
+        location: string;
+        source: string;
+        run_mode: string;
+        sources: string | null;
+        status: string;
+        started_at: string;
+        finished_at: string | null;
+        job_count: number | null;
+        error: string | null;
+    } | null;
 }

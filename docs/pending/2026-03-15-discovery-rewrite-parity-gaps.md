@@ -8,35 +8,40 @@ This note tracks what is still missing before the TypeScript discovery rewrite c
 
 - discovery core types and source registry
 - shared rate limiting and HTTP wrapper
+- discovery orchestration with per-source failure isolation
 - LinkedIn guest search parsing
 - LinkedIn guest detail parsing
+- LinkedIn guest source execution
 - LinkedIn external apply URL extraction order
 - ATS detection and URL normalization
+- ATS expansion for supported providers
 - Greenhouse normalization
 - Lever normalization
 - salary normalization
 - work arrangement / employment type / experience heuristics
 - PR / clearance detection
+- SEEK browser output normalization into the canonical discovery job shape
+- additive SQLite storage support for the richer discovery schema
+- initial MCP exposure through `discover_jobs`
+- company-site career discovery fallback
+- fallback gating and cache behavior
+- discovery scheduling through MCP and the background agent
+- latest discovery run reporting through MCP
+- formal Python-vs-TS fixture parity harness
+- initial side-by-side parity comparison for LinkedIn search/detail, ATS detection, and salary normalization
+- live TS smoke checks for LinkedIn guest discovery and direct Greenhouse crawling
+- automated live TS-vs-Python LinkedIn parity smoke runner
+- recorded live parity report artifact for the default `full stack` / `Sydney` smoke query
 
 ## Remaining Gaps
 
-- `runDiscovery()` is still a scaffold and does not yet orchestrate real source execution.
-- LinkedIn guest source has parsing functions, but not the full fetch-and-normalize source module wired into orchestration.
-- ATS registry exists, but provider invocation is not yet wired into a discovery pipeline.
-- company-site career discovery fallback is not ported yet.
-- SQLite storage is not yet extended for the richer discovery schema.
-- MCP tools do not expose the new discovery engine yet.
-- existing SEEK Playwright output is not yet normalized into the new canonical discovery job shape.
 - `Indeed` and `Jora` browser sources are not implemented beyond the planned-source registry entries.
-- no side-by-side Python-vs-TS golden comparison harness exists yet.
-- no live smoke parity run has been recorded for the new TS LinkedIn/ATS modules.
+- parity coverage is still limited to the initial canonical fixture set and should be expanded as more edge cases are discovered.
+- live parity coverage is still limited to a single default LinkedIn smoke query and should be broadened to more queries and ATS outcomes.
 
 ## Current Recommendation
 
 Treat the Python crawler as the behavior oracle until the following are done:
 
-1. wire real source execution into `runDiscovery()`
-2. port career fallback
-3. port storage integration
-4. expose discovery through MCP tools
-5. run live LinkedIn + ATS smoke parity checks
+1. expand the fixture parity manifest when new parser or normalization edge cases are found
+2. broaden the recorded live parity smoke set beyond the default LinkedIn query

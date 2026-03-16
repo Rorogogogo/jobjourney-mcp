@@ -14,6 +14,8 @@
     "prepublishOnly": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "parity:discovery": "npm run build && node dist/discovery/parity/cli.js",
+    "parity:live-smoke": "npm run build && node dist/discovery/parity/live-smoke-cli.js",
     "agent": "node dist/agent/index.js",
     "typecheck": "tsc --noEmit"
   },

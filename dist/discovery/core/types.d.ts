@@ -42,10 +42,16 @@ export interface DiscoveryRunOptions {
     pages?: number;
     minDelay?: number;
     maxDelay?: number;
+    careerDiscovery?: boolean;
+    careerDiscoveryOnlyUnknown?: boolean;
+    careerDiscoveryMaxProbes?: number;
+    careerPaths?: string[];
 }
 export interface DiscoveryRunResult {
     jobs: DiscoveryJob[];
     sources: DiscoverySourceName[];
+    failedSources: DiscoverySourceName[];
+    expandedCompanies: string[];
 }
 export interface DiscoveryJobSeed {
     id: string;

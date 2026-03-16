@@ -23,6 +23,7 @@ interface LeverJobItem {
 }
 export declare class LeverCrawler {
     private readonly httpClient;
+    readonly name: "lever";
     readonly atsType = "lever";
     constructor(httpClient: HttpClient);
     crawlJobs(companyIdentifier: string, extractedAt: string): Promise<DiscoveryJob[]>;

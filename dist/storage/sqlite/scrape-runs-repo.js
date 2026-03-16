@@ -11,6 +11,8 @@ export class ScrapeRunsRepo {
           keyword,
           location,
           source,
+          run_mode,
+          sources,
           status,
           started_at
         )
@@ -19,6 +21,8 @@ export class ScrapeRunsRepo {
           @keyword,
           @location,
           @source,
+          @runMode,
+          @sources,
           'running',
           datetime('now')
         )
@@ -28,6 +32,8 @@ export class ScrapeRunsRepo {
             keyword: run.keyword,
             location: run.location,
             source: run.source,
+            runMode: run.runMode ?? "scrape",
+            sources: run.sources ?? null,
         });
         return { id: Number(result.lastInsertRowid) };
     }
@@ -48,5 +54,14 @@ export class ScrapeRunsRepo {
             jobCount: result.jobCount ?? null,
             error: result.error ?? null,
         });
+    }
+    getLatestDiscoveryRun() {
+        return this.db
+            .prepare(`SELECT id, keyword, location, source, run_mode, sources, status, started_at, finished_at, job_count, error
+           FROM scrape_runs
+           WHERE run_mode = 'discover'
+           ORDER BY id DESC
+           LIMIT 1`)
+            .get() ?? null;
     }
 }

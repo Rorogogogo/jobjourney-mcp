@@ -20,6 +20,10 @@ export const DISCOVERY_SOURCE_NAMES = DISCOVERY_SOURCE_DEFINITIONS.map(
   (definition) => definition.name,
 );
 
+export const ACTIVE_DISCOVERY_SOURCE_NAMES = DISCOVERY_SOURCE_DEFINITIONS.filter(
+  (definition) => definition.status === "active",
+).map((definition) => definition.name);
+
 export function getDiscoverySourceDefinition(
   name: DiscoverySourceName,
 ): DiscoverySourceDefinition {
@@ -34,4 +38,8 @@ export function getDiscoverySourceDefinition(
 
 export function getAllDiscoverySourceDefinitions(): ReadonlyArray<DiscoverySourceDefinition> {
   return DISCOVERY_SOURCE_DEFINITIONS;
+}
+
+export function getActiveDiscoverySourceNames(): DiscoverySourceName[] {
+  return [...ACTIVE_DISCOVERY_SOURCE_NAMES];
 }
