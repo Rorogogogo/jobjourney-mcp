@@ -38,6 +38,7 @@ This note tracks what is still missing before the TypeScript discovery rewrite c
 - `Indeed` and `Jora` browser sources are not implemented beyond the planned-source registry entries.
 - parity coverage is still limited to the initial canonical fixture set and should be expanded as more edge cases are discovered.
 - live parity coverage is still limited to a single default LinkedIn smoke query and should be broadened to more queries and ATS outcomes.
+- the legacy browser LinkedIn scraper in `src/scraper` should be kept only as an internal transition fallback and removed once the `linkedin-guest` path has stable parity and live smoke coverage.
 
 ## Current Recommendation
 

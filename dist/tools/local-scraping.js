@@ -67,38 +67,65 @@ export function registerLocalScrapingTools(server, deps = {}) {
         execute: async (args) => {
             const db = openDatabaseImpl();
             try {
-                const result = await runDiscoveryImpl({
+                const selectedSources = args.sources?.length
+                    ? args.sources
+                    : getActiveDiscoverySourceNamesImpl();
+                const runsRepo = new ScrapeRunsRepo(db);
+                const run = runsRepo.createRun({
                     keyword: args.keyword,
                     location: args.location,
-                    sources: args.sources,
-                    pages: Math.min(args.pages, 30),
-                }, {
-                    logger: discoveryLogger,
+                    source: "discover",
+                    runMode: "discover",
+                    sources: selectedSources.join(","),
                 });
-                const repo = new DiscoveryJobsRepo(db);
-                repo.upsertJobs(result.jobs, {
-                    keyword: args.keyword,
-                    location: args.location,
-                });
-                return JSON.stringify({
-                    keyword: args.keyword,
-                    location: args.location,
-                    totalJobs: result.jobs.length,
-                    successfulSources: result.sources,
-                    failedSources: result.failedSources,
-                    expandedCompanies: result.expandedCompanies,
-                    jobs: result.jobs.map((job) => ({
-                        id: job.id,
-                        title: job.title,
-                        company: job.company,
-                        location: job.location,
-                        source: job.source,
-                        jobUrl: job.jobUrl,
-                        externalUrl: job.externalUrl,
-                        atsType: job.atsType,
-                        postedAt: job.postedAt,
-                    })),
-                }, null, 2);
+                try {
+                    const result = await runDiscoveryImpl({
+                        keyword: args.keyword,
+                        location: args.location,
+                        sources: selectedSources,
+                        pages: Math.min(args.pages, 30),
+                    }, {
+                        logger: discoveryLogger,
+                    });
+                    const repo = new DiscoveryJobsRepo(db);
+                    repo.upsertJobs(result.jobs, {
+                        keyword: args.keyword,
+                        location: args.location,
+                        runId: run.id,
+                    });
+                    runsRepo.finishRun(run.id, {
+                        status: "success",
+                        jobCount: result.jobs.length,
+                    });
+                    return JSON.stringify({
+                        runId: run.id,
+                        keyword: args.keyword,
+                        location: args.location,
+                        totalJobs: result.jobs.length,
+                        successfulSources: result.sources,
+                        failedSources: result.failedSources,
+                        expandedCompanies: result.expandedCompanies,
+                        jobs: result.jobs.map((job) => ({
+                            id: job.id,
+                            title: job.title,
+                            company: job.company,
+                            location: job.location,
+                            source: job.source,
+                            jobUrl: job.jobUrl,
+                            externalUrl: job.externalUrl,
+                            atsType: job.atsType,
+                            postedAt: job.postedAt,
+                        })),
+                    }, null, 2);
+                }
+                catch (error) {
+                    const message = error instanceof Error ? error.message : String(error);
+                    runsRepo.finishRun(run.id, {
+                        status: "error",
+                        error: message,
+                    });
+                    throw error;
+                }
             }
             finally {
                 db.close();

@@ -3,6 +3,84 @@ import { runDiscovery } from "../../../src/discovery/core/run-discovery.js";
 import { createEmptyDiscoveryJob } from "../../../src/discovery/core/types.js";
 
 describe("runDiscovery", () => {
+  it("starts selected sources concurrently and merges their jobs", async () => {
+    const started: string[] = [];
+    const releaseGate = createDeferred<void>();
+    const linkedinStarted = createDeferred<void>();
+    const seekStarted = createDeferred<void>();
+
+    const linkedinJob = createEmptyDiscoveryJob({
+      id: "li-1",
+      source: "linkedin",
+      title: "Platform Engineer",
+      company: "Example",
+      location: "Sydney",
+      description: "Backend role with Python.",
+      jobUrl: "https://www.linkedin.com/jobs/view/1",
+      extractedAt: "2026-03-17T00:00:00Z",
+    });
+
+    const seekJob = createEmptyDiscoveryJob({
+      id: "seek-1",
+      source: "seek",
+      title: "Site Reliability Engineer",
+      company: "Example",
+      location: "Sydney",
+      description: "AWS and Kubernetes role.",
+      jobUrl: "https://www.seek.com.au/job/1",
+      extractedAt: "2026-03-17T00:00:00Z",
+    });
+
+    const run = runDiscovery(
+      {
+        keyword: "engineer",
+        location: "Sydney",
+        sources: ["linkedin", "seek"],
+      },
+      {
+        sourceFactories: {
+          linkedin: () => ({
+            name: "linkedin",
+            discoverJobs: async () => {
+              started.push("linkedin");
+              linkedinStarted.resolve();
+              await releaseGate.promise;
+              return [linkedinJob];
+            },
+          }),
+          seek: () => ({
+            name: "seek",
+            discoverJobs: async () => {
+              started.push("seek");
+              seekStarted.resolve();
+              await releaseGate.promise;
+              return [seekJob];
+            },
+          }),
+        },
+        atsCrawlerFactories: {},
+        extractedAt: () => "2026-03-17T00:00:00Z",
+      },
+    );
+
+    await linkedinStarted.promise;
+    await Promise.resolve();
+
+    try {
+      expect(started).toEqual(["linkedin", "seek"]);
+      await seekStarted.promise;
+    } finally {
+      releaseGate.resolve();
+    }
+
+    const result = await run;
+
+    expect(result.sources).toEqual(["linkedin", "seek"]);
+    expect(result.failedSources).toEqual([]);
+    expect(result.jobs).toHaveLength(2);
+    expect(result.jobs.map((job) => job.id)).toEqual(["li-1", "seek-1"]);
+  });
+
   it("continues when one source fails and returns jobs from successful sources", async () => {
     const seekJob = createEmptyDiscoveryJob({
       id: "seek-1",
@@ -168,3 +246,16 @@ describe("runDiscovery", () => {
     });
   });
 });
+
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve: (value: T | PromiseLike<T>) => void;
+}
+
+function createDeferred<T>(): Deferred<T> {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}

@@ -75,96 +75,129 @@ export async function runDiscovery(
   const expandedCompanyKeys = new Set<string>();
   const careerDiscoveryCache = new Map<string, unknown>();
   const seenJobs = new Set<string>();
+  const sourceResults = await mapWithConcurrency(
+    selectedSources,
+    2,
+    async (sourceName): Promise<SourceRunResult> => {
+      const factory = sourceFactories[sourceName];
+      if (!factory) {
+        return {
+          sourceName,
+          success: false,
+          jobs: [],
+          expandedCompanies: [],
+        };
+      }
 
-  for (const sourceName of selectedSources) {
-    const factory = sourceFactories[sourceName];
-    if (!factory) {
-      failedSources.push(sourceName);
-      continue;
-    }
-
-    logger?.({
-      event: "discovery_source_start",
-      source: sourceName,
-      keyword: options.keyword,
-      location: options.location,
-      pages: options.pages ?? 30,
-    });
-
-    try {
-      const source = factory();
-      const discoveredJobs = await source.discoverJobs({
+      logger?.({
+        event: "discovery_source_start",
+        source: sourceName,
         keyword: options.keyword,
         location: options.location,
         pages: options.pages ?? 30,
-        extractedAt: extractedAtFactory(),
-      });
-      successfulSources.push(sourceName);
-      logger?.({
-        event: "discovery_source_success",
-        source: sourceName,
-        discoveredJobs: discoveredJobs.length,
       });
 
-      for (const job of discoveredJobs) {
-        const enriched = enrichDiscoveryJob(
-          await maybeApplyCareerDiscovery(
-            applyAtsDetection(job),
-            options,
-            careerDiscoverer,
-            careerDiscoveryCache,
-            logger,
-          ),
-        );
-        pushJob(jobs, seenJobs, enriched);
-
-        if (!isSupportedAts(enriched.atsType) || !enriched.atsIdentifier) {
-          continue;
-        }
-
-        const companyKey = `${enriched.atsType}:${enriched.atsIdentifier}`;
-        if (expandedCompanyKeys.has(companyKey)) {
-          continue;
-        }
-
-        const crawlerFactory = atsCrawlerFactories[enriched.atsType];
-        if (!crawlerFactory) {
-          continue;
-        }
-
-        expandedCompanyKeys.add(companyKey);
-        expandedCompanies.push(companyKey);
-        logger?.({
-          event: "discovery_ats_expand_start",
-          source: enriched.source,
-          atsType: enriched.atsType,
-          companyIdentifier: enriched.atsIdentifier,
+      try {
+        const source = factory();
+        const discoveredJobs = await source.discoverJobs({
+          keyword: options.keyword,
+          location: options.location,
+          pages: options.pages ?? 30,
+          extractedAt: extractedAtFactory(),
         });
-        const atsJobs = await crawlerFactory().crawlJobs(
-          enriched.atsIdentifier,
-          extractedAtFactory(),
-        );
         logger?.({
-          event: "discovery_ats_expand_success",
-          source: enriched.source,
-          atsType: enriched.atsType,
-          companyIdentifier: enriched.atsIdentifier,
-          discoveredJobs: atsJobs.length,
+          event: "discovery_source_success",
+          source: sourceName,
+          discoveredJobs: discoveredJobs.length,
         });
-        for (const atsJob of atsJobs) {
-          atsJob.source = enriched.source;
-          atsJob.atsType = enriched.atsType;
-          atsJob.atsIdentifier = enriched.atsIdentifier;
-          pushJob(jobs, seenJobs, enrichDiscoveryJob(applyAtsDetection(atsJob)));
+
+        const sourceJobs: DiscoveryJob[] = [];
+        const sourceExpandedCompanies: string[] = [];
+
+        for (const job of discoveredJobs) {
+          const enriched = enrichDiscoveryJob(
+            await maybeApplyCareerDiscovery(
+              applyAtsDetection(job),
+              options,
+              careerDiscoverer,
+              careerDiscoveryCache,
+              logger,
+            ),
+          );
+          sourceJobs.push(enriched);
+
+          if (!isSupportedAts(enriched.atsType) || !enriched.atsIdentifier) {
+            continue;
+          }
+
+          const companyKey = `${enriched.atsType}:${enriched.atsIdentifier}`;
+          if (expandedCompanyKeys.has(companyKey)) {
+            continue;
+          }
+
+          const crawlerFactory = atsCrawlerFactories[enriched.atsType];
+          if (!crawlerFactory) {
+            continue;
+          }
+
+          expandedCompanyKeys.add(companyKey);
+          sourceExpandedCompanies.push(companyKey);
+          logger?.({
+            event: "discovery_ats_expand_start",
+            source: enriched.source,
+            atsType: enriched.atsType,
+            companyIdentifier: enriched.atsIdentifier,
+          });
+          const atsJobs = await crawlerFactory().crawlJobs(
+            enriched.atsIdentifier,
+            extractedAtFactory(),
+          );
+          logger?.({
+            event: "discovery_ats_expand_success",
+            source: enriched.source,
+            atsType: enriched.atsType,
+            companyIdentifier: enriched.atsIdentifier,
+            discoveredJobs: atsJobs.length,
+          });
+          for (const atsJob of atsJobs) {
+            atsJob.source = enriched.source;
+            atsJob.atsType = enriched.atsType;
+            atsJob.atsIdentifier = enriched.atsIdentifier;
+            sourceJobs.push(enrichDiscoveryJob(applyAtsDetection(atsJob)));
+          }
         }
+
+        return {
+          sourceName,
+          success: true,
+          jobs: sourceJobs,
+          expandedCompanies: sourceExpandedCompanies,
+        };
+      } catch (error) {
+        logger?.({
+          event: "discovery_source_error",
+          source: sourceName,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return {
+          sourceName,
+          success: false,
+          jobs: [],
+          expandedCompanies: [],
+        };
       }
-    } catch (error) {
-      logger?.({
-        event: "discovery_source_error",
-        source: sourceName,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      failedSources.push(sourceName);
+    },
+  );
+
+  for (const result of sourceResults) {
+    if (result.success) {
+      successfulSources.push(result.sourceName);
+      expandedCompanies.push(...result.expandedCompanies);
+      for (const job of result.jobs) {
+        pushJob(jobs, seenJobs, job);
+      }
+    } else {
+      failedSources.push(result.sourceName);
     }
   }
 
@@ -181,6 +214,13 @@ export async function runDiscovery(
     failedSources,
     expandedCompanies,
   };
+}
+
+interface SourceRunResult {
+  sourceName: DiscoverySourceName;
+  success: boolean;
+  jobs: DiscoveryJob[];
+  expandedCompanies: string[];
 }
 
 function createDefaultSourceFactories(
@@ -201,6 +241,28 @@ function createDefaultAtsCrawlerFactories(
     greenhouse: () => new GreenhouseCrawler(httpClient),
     lever: () => new LeverCrawler(httpClient),
   };
+}
+
+async function mapWithConcurrency<T, TResult>(
+  items: readonly T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<TResult>,
+): Promise<TResult[]> {
+  const results = new Array<TResult>(items.length);
+  let nextIndex = 0;
+
+  const workerCount = Math.max(1, Math.min(concurrency, items.length));
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+        results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+      }
+    }),
+  );
+
+  return results;
 }
 
 function applyAtsDetection(job: DiscoveryJob): DiscoveryJob {

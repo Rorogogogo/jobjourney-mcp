@@ -64,9 +64,100 @@ describe("registerLocalScrapingTools", () => {
 
     const db = openDatabase(dbPath);
     const stored = db
-      .prepare("SELECT COUNT(*) AS count FROM jobs WHERE url = ?")
-      .get("https://www.linkedin.com/jobs/view/1") as { count: number };
+      .prepare("SELECT COUNT(*) AS count, MAX(run_id) AS run_id FROM jobs WHERE url = ?")
+      .get("https://www.linkedin.com/jobs/view/1") as { count: number; run_id: number | null };
     expect(stored.count).toBe(1);
+    expect(stored.run_id).toBeTypeOf("number");
+
+    const run = db
+      .prepare(
+        `SELECT keyword, location, source, run_mode, sources, status, job_count, error
+         FROM scrape_runs
+         ORDER BY id DESC
+         LIMIT 1`,
+      )
+      .get() as {
+      keyword: string;
+      location: string;
+      source: string;
+      run_mode: string;
+      sources: string | null;
+      status: string;
+      job_count: number | null;
+      error: string | null;
+    };
+    expect(run).toMatchObject({
+      keyword: "full stack",
+      location: "Sydney",
+      source: "discover",
+      run_mode: "discover",
+      sources: "linkedin",
+      status: "success",
+      job_count: 1,
+      error: null,
+    });
+    db.close();
+  });
+
+  it("records failed discover_jobs runs in scrape_runs", async () => {
+    const tools = new Map<string, any>();
+    const server = {
+      addTool(definition: any) {
+        tools.set(definition.name, definition);
+      },
+    };
+    const home = createTmpHome();
+    const dbPath = path.join(home, ".jobjourney", "jobs.db");
+
+    registerLocalScrapingTools(server as any, {
+      openDatabase: () => openDatabase(dbPath),
+      ensureAgentRunning: () => {},
+      runDiscovery: vi.fn(async () => {
+        throw new Error("LinkedIn guest endpoint failed");
+      }),
+    });
+
+    const tool = tools.get("discover_jobs");
+    await expect(
+      tool.execute({
+        keyword: "full stack",
+        location: "Sydney",
+        sources: ["linkedin"],
+        pages: 2,
+      }),
+    ).rejects.toThrow("LinkedIn guest endpoint failed");
+
+    const db = openDatabase(dbPath);
+    const run = db
+      .prepare(
+        `SELECT keyword, location, source, run_mode, sources, status, job_count, error
+         FROM scrape_runs
+         ORDER BY id DESC
+         LIMIT 1`,
+      )
+      .get() as {
+      keyword: string;
+      location: string;
+      source: string;
+      run_mode: string;
+      sources: string | null;
+      status: string;
+      job_count: number | null;
+      error: string | null;
+    };
+    expect(run).toMatchObject({
+      keyword: "full stack",
+      location: "Sydney",
+      source: "discover",
+      run_mode: "discover",
+      sources: "linkedin",
+      status: "error",
+      job_count: null,
+      error: "LinkedIn guest endpoint failed",
+    });
+
+    const jobsCount = db.prepare("SELECT COUNT(*) AS count FROM jobs").get() as { count: number };
+    expect(jobsCount.count).toBe(0);
     db.close();
   });
 

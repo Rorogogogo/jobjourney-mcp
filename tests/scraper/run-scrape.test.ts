@@ -2,18 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import path from "node:path";
 import { createTmpHome } from "../helpers/tmp-home.js";
 import { openDatabase } from "../../src/storage/sqlite/db.js";
-import { JobsRepo } from "../../src/storage/sqlite/jobs-repo.js";
 import { ScrapeRunsRepo } from "../../src/storage/sqlite/scrape-runs-repo.js";
-import { renderMarkdownReport } from "../../src/scraper/core/markdown.js";
-import { getAvailableSources } from "../../src/scraper/core/run-scrape.js";
-import type {
-  ScrapeRequest,
-  ScrapedJob,
-  JobSourceScraper,
-} from "../../src/scraper/core/types.js";
+import { getAvailableSources, runScrape } from "../../src/scraper/core/run-scrape.js";
+import { createEmptyDiscoveryJob } from "../../src/discovery/core/types.js";
 
-// We test the pipeline logic without going through runScrape directly,
-// to avoid needing to mock the scraper registry. Instead we replicate the pipeline steps.
 describe("scrape pipeline", () => {
   let dbPath: string;
 
@@ -22,76 +14,114 @@ describe("scrape pipeline", () => {
     dbPath = path.join(home, ".jobjourney", "jobs.db");
   });
 
-  it("creates a scrape run, saves jobs, and returns markdown", async () => {
-    const mockJobs: ScrapedJob[] = [
+  it("creates a scrape run, saves primary source jobs, and returns markdown", async () => {
+    const extractedAt = "2026-03-17T00:00:00Z";
+    const primaryJob = createEmptyDiscoveryJob({
+      id: "seek-100",
+      source: "seek",
+      title: "AI Engineer",
+      company: "Canva",
+      location: "Sydney",
+      description: "Build ML products.",
+      jobUrl: "https://www.seek.com.au/job/100",
+      postedAt: "2026-03-10",
+      extractedAt,
+    });
+    const expandedJob = createEmptyDiscoveryJob({
+      id: "lever-1",
+      source: "seek",
+      title: "Backend Engineer",
+      company: "Canva",
+      location: "Sydney",
+      description: "ATS-expanded role.",
+      jobUrl: "https://jobs.lever.co/canva/abc",
+      extractedAt,
+    });
+    expandedJob.externalUrl = "https://jobs.lever.co/canva/abc/apply";
+    expandedJob.atsType = "lever";
+    expandedJob.atsIdentifier = "canva";
+
+    const result = await runScrape(
       {
-        title: "AI Engineer",
-        company: "Canva",
+        keyword: "AI Engineer",
         location: "Sydney",
-        url: "https://seek.com.au/job/100",
         source: "seek",
-        scrapedAt: new Date().toISOString(),
+        dbPath,
+        maxPages: 2,
       },
       {
-        title: "ML Engineer",
-        company: "Atlassian",
-        location: "Sydney",
-        url: "https://seek.com.au/job/101",
-        source: "seek",
-        scrapedAt: new Date().toISOString(),
+        runDiscovery: vi.fn(async () => ({
+          jobs: [primaryJob, expandedJob],
+          sources: ["seek"],
+          failedSources: [],
+          expandedCompanies: ["lever:canva"],
+        })),
       },
-    ];
+    );
+
+    expect(result.runId).toBeTruthy();
+    expect(result.jobs).toHaveLength(1);
+    expect(result.jobs[0]).toMatchObject({
+      title: "AI Engineer",
+      source: "seek",
+      url: "https://www.seek.com.au/job/100",
+    });
+    expect(result.markdown).toContain("# Job Results");
+    expect(result.markdown).toContain("AI Engineer");
+    expect(result.markdown).not.toContain("Backend Engineer");
 
     const db = openDatabase(dbPath);
-    const jobsRepo = new JobsRepo(db);
-    const runsRepo = new ScrapeRunsRepo(db);
+    const storedJobs = db.prepare("SELECT title, url, run_id FROM jobs ORDER BY id ASC").all() as Array<{
+      title: string;
+      url: string;
+      run_id: number | null;
+    }>;
+    expect(storedJobs).toEqual([
+      {
+        title: "AI Engineer",
+        url: "https://www.seek.com.au/job/100",
+        run_id: result.runId,
+      },
+    ]);
 
-    // Simulate pipeline
-    const run = runsRepo.createRun({
-      keyword: "AI Engineer",
-      location: "Sydney",
-      source: "seek",
+    const run = db.prepare("SELECT status, job_count, error FROM scrape_runs WHERE id = ?").get(
+      result.runId,
+    ) as { status: string; job_count: number | null; error: string | null };
+    expect(run).toEqual({
+      status: "success",
+      job_count: 1,
+      error: null,
     });
-    jobsRepo.upsertJobs(
-      mockJobs.map((j) => ({
-        ...j,
-        runId: run.id,
-        keyword: "AI Engineer",
-        searchLocation: "Sydney",
-      })),
-    );
-    const markdown = renderMarkdownReport(mockJobs);
-    runsRepo.finishRun(run.id, { status: "success", jobCount: mockJobs.length });
-
-    // Verify
-    expect(run.id).toBeTruthy();
-    expect(markdown).toContain("# Job Results");
-    expect(markdown).toContain("AI Engineer");
-    expect(jobsRepo.search({})).toHaveLength(2);
-
     db.close();
   });
 
-  it("records error in scrape run on failure", () => {
+  it("records error in scrape run on failure", async () => {
+    await expect(
+      runScrape(
+        {
+          keyword: "test",
+          location: "test",
+          source: "seek",
+          dbPath,
+        },
+        {
+          runDiscovery: vi.fn(async () => {
+            throw new Error("selectors changed");
+          }),
+        },
+      ),
+    ).rejects.toThrow("selectors changed");
+
     const db = openDatabase(dbPath);
-    const runsRepo = new ScrapeRunsRepo(db);
-
-    const run = runsRepo.createRun({
-      keyword: "test",
-      location: "test",
-      source: "seek",
-    });
-    runsRepo.finishRun(run.id, { status: "error", error: "selectors changed" });
-
-    // Verify run was recorded with error
-    const rows = db.prepare("SELECT * FROM scrape_runs WHERE id = ?").all(run.id) as any[];
+    const rows = db.prepare("SELECT * FROM scrape_runs ORDER BY id DESC LIMIT 1").all() as any[];
     expect(rows[0].status).toBe("error");
     expect(rows[0].error).toBe("selectors changed");
-
     db.close();
   });
 
   it("lists available sources", () => {
     expect(getAvailableSources()).toContain("seek");
+    expect(getAvailableSources()).toContain("linkedin");
+    expect(getAvailableSources()).not.toContain("indeed");
   });
 });

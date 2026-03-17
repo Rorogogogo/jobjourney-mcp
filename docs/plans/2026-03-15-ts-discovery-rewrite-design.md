@@ -28,6 +28,17 @@ The end state is one product with one MCP/plugin entrypoint and two internal acq
 
 Users should not manage multiple runtimes manually. The plugin remains the public entrypoint for setup, login, scheduling, reporting, and local storage.
 
+### Source transport policy
+
+The long-term supported transport model is:
+
+- `linkedin` uses direct HTTP guest scraping
+- `seek` uses browser automation
+- `indeed` uses browser automation
+- `jora` uses browser automation
+
+The older browser LinkedIn scraper may remain temporarily as a debugging or transition fallback, but it is not a supported product path and should be removed once `linkedin-guest` has stable parity and live smoke coverage.
+
 ## Key Decisions
 
 ### TypeScript becomes the canonical crawler runtime
@@ -190,6 +201,18 @@ The long-term discovery command/tool should run all enabled sources through one 
 6. expand supported ATS jobs when available
 7. optionally run career discovery fallback when enabled
 8. store normalized jobs and export/search/report from the plugin
+
+### Source execution model
+
+Top-level discovery sources should run concurrently with a bounded default concurrency of `2`.
+
+That allows:
+
+- fast HTTP sources such as `linkedin` to run alongside slower Playwright sources such as `seek`
+- one source failure to remain isolated from the others
+- source-level logs and run tracking to stay attributable
+
+ATS expansion should remain more conservative than top-level source execution, with an initial default concurrency target of `1`.
 
 ### Rate limiting
 
