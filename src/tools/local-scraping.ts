@@ -43,7 +43,7 @@ export function registerLocalScrapingTools(
   const checkPlaywrightReadyImpl = deps.checkPlaywrightReady ?? checkPlaywrightReady;
   const checkForUpdatesImpl = deps.checkForUpdates ?? checkForUpdates;
   const discoveryLogger = (payload: Record<string, unknown>) => {
-    console.log(`[discover] ${JSON.stringify(payload)}`);
+    console.error(`[discover] ${JSON.stringify(payload)}`);
   };
 
   server.addTool({

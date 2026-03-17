@@ -23,7 +23,7 @@ export function registerLocalScrapingTools(server, deps = {}) {
     const checkPlaywrightReadyImpl = deps.checkPlaywrightReady ?? checkPlaywrightReady;
     const checkForUpdatesImpl = deps.checkForUpdates ?? checkForUpdates;
     const discoveryLogger = (payload) => {
-        console.log(`[discover] ${JSON.stringify(payload)}`);
+        console.error(`[discover] ${JSON.stringify(payload)}`);
     };
     server.addTool({
         name: "check_for_updates",

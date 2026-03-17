@@ -99,6 +99,53 @@ describe("registerLocalScrapingTools", () => {
     db.close();
   });
 
+  it("keeps discovery progress logs off stdout for MCP stdio safety", async () => {
+    const tools = new Map<string, any>();
+    const server = {
+      addTool(definition: any) {
+        tools.set(definition.name, definition);
+      },
+    };
+    const home = createTmpHome();
+    const dbPath = path.join(home, ".jobjourney", "jobs.db");
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    registerLocalScrapingTools(server as any, {
+      openDatabase: () => openDatabase(dbPath),
+      ensureAgentRunning: () => {},
+      runDiscovery: vi.fn(async (_options, deps) => {
+        deps?.logger?.({ event: "discovery_source_start", source: "linkedin" });
+        return {
+          jobs: [],
+          sources: ["linkedin"],
+          failedSources: [],
+          expandedCompanies: [],
+        };
+      }),
+    });
+
+    try {
+      const tool = tools.get("discover_jobs");
+      await tool.execute({
+        keyword: "full stack",
+        location: "Sydney",
+        sources: ["linkedin"],
+        pages: 1,
+      });
+
+      expect(logSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining("[discover]"),
+      );
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining("[discover]"),
+      );
+    } finally {
+      logSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
+  });
+
   it("records failed discover_jobs runs in scrape_runs", async () => {
     const tools = new Map<string, any>();
     const server = {
