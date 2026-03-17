@@ -15,6 +15,18 @@ interface LocalScrapingToolDeps {
     ensureAgentRunning?: typeof ensureAgentRunning;
     loginToSite?: typeof loginToSite;
     hasCookies?: typeof hasCookies;
+    checkPlaywrightReady?: typeof checkPlaywrightReady;
+    checkForUpdates?: typeof checkForUpdates;
 }
 export declare function registerLocalScrapingTools(server: FastMCP<SessionAuth>, deps?: LocalScrapingToolDeps): void;
+declare function checkPlaywrightReady(): Promise<{
+    ready: boolean;
+    details: string;
+}>;
+declare function checkForUpdates(): Promise<{
+    currentVersion: string;
+    latestVersion: string;
+    updateAvailable: boolean;
+    error: string;
+}>;
 export {};

@@ -14,10 +14,11 @@ import { registerChatbotTools } from "./tools/chatbot.js";
 import { registerScrapingTools } from "./tools/scraping.js";
 import { registerAnalyticsTools } from "./tools/analytics.js";
 import { registerLocalScrapingTools } from "./tools/local-scraping.js";
+import { PLUGIN_NAME, PLUGIN_VERSION } from "./version.js";
 const transport = (process.env.TRANSPORT || "stdio");
 const server = new FastMCP({
-    name: "jobjourney-claude-plugin",
-    version: "3.1.0",
+    name: PLUGIN_NAME,
+    version: PLUGIN_VERSION,
     ...(transport === "httpStream" && {
         authenticate: async (request) => {
             const auth = request.headers.authorization;

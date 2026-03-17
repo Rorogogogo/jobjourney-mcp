@@ -260,4 +260,99 @@ describe("registerLocalScrapingTools", () => {
     expect(report).toContain("Job URL:");
     expect(report).toContain("External URL:");
   });
+
+  it("registers setup_local_scraping and reports local readiness", async () => {
+    const tools = new Map<string, any>();
+    const server = {
+      addTool(definition: any) {
+        tools.set(definition.name, definition);
+      },
+    };
+    const home = createTmpHome();
+    const dbPath = path.join(home, ".jobjourney", "jobs.db");
+
+    registerLocalScrapingTools(server as any, {
+      openDatabase: () => openDatabase(dbPath),
+      ensureAgentRunning: () => true,
+      hasCookies: (site: string) => site === "linkedin",
+      checkPlaywrightReady: vi.fn(async () => ({
+        ready: false,
+        details: "Chromium is not installed.",
+      })),
+    });
+
+    const tool = tools.get("setup_local_scraping");
+    expect(tool).toBeTruthy();
+
+    const result = await tool.execute({});
+
+    expect(result).toContain("# Local Scraping Setup");
+    expect(result).toContain("- Database: ready (");
+    expect(result).toContain(".jobjourney/jobs.db");
+    expect(result).toContain("- Agent: started");
+    expect(result).toContain("- Playwright: not ready");
+    expect(result).toContain("Chromium is not installed.");
+    expect(result).toContain("- seek: login required");
+    expect(result).toContain("- linkedin: login saved (optional for guest discovery)");
+    expect(result).toContain("npx playwright install chromium");
+    expect(result).toContain('Use login_jobsite with site "seek"');
+    expect(result).toContain('Use discover_jobs with keyword "full stack", location "Sydney", sources ["linkedin", "seek"], pages 1');
+  });
+
+  it("registers check_for_updates and reports when a newer version is available", async () => {
+    const tools = new Map<string, any>();
+    const server = {
+      addTool(definition: any) {
+        tools.set(definition.name, definition);
+      },
+    };
+
+    registerLocalScrapingTools(server as any, {
+      checkForUpdates: vi.fn(async () => ({
+        currentVersion: "3.1.0",
+        latestVersion: "3.2.0",
+        updateAvailable: true,
+        error: "",
+      })),
+    });
+
+    const tool = tools.get("check_for_updates");
+    expect(tool).toBeTruthy();
+
+    const result = await tool.execute({});
+
+    expect(result).toContain("# Plugin Update Status");
+    expect(result).toContain("- Current version: 3.1.0");
+    expect(result).toContain("- Latest version: 3.2.0");
+    expect(result).toContain("- Update available: yes");
+    expect(result).toContain("claude mcp remove jobjourney");
+    expect(result).toContain("npx -y jobjourney-claude-plugin");
+  });
+
+  it("registers check_for_updates and degrades cleanly when the lookup fails", async () => {
+    const tools = new Map<string, any>();
+    const server = {
+      addTool(definition: any) {
+        tools.set(definition.name, definition);
+      },
+    };
+
+    registerLocalScrapingTools(server as any, {
+      checkForUpdates: vi.fn(async () => ({
+        currentVersion: "3.1.0",
+        latestVersion: "",
+        updateAvailable: false,
+        error: "Registry lookup failed",
+      })),
+    });
+
+    const tool = tools.get("check_for_updates");
+    const result = await tool.execute({});
+
+    expect(result).toContain("# Plugin Update Status");
+    expect(result).toContain("- Current version: 3.1.0");
+    expect(result).toContain("- Latest version: unavailable");
+    expect(result).toContain("- Update available: unknown");
+    expect(result).toContain("- Check status: Registry lookup failed");
+  });
 });

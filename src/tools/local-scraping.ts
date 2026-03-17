@@ -1,4 +1,5 @@
 import { FastMCP } from "fastmcp";
+import { chromium } from "playwright";
 import { z } from "zod";
 import { runScrape, getAvailableSources } from "../scraper/core/run-scrape.js";
 import { openDatabase } from "../storage/sqlite/db.js";
@@ -11,6 +12,7 @@ import type { SessionAuth } from "../types.js";
 import { runDiscovery } from "../discovery/core/run-discovery.js";
 import { getActiveDiscoverySourceNames } from "../discovery/sources/registry.js";
 import { DiscoveryJobsRepo } from "../discovery/storage/discovery-jobs-repo.js";
+import { PLUGIN_NAME, PLUGIN_VERSION } from "../version.js";
 
 interface LocalScrapingToolDeps {
   runScrape?: typeof runScrape;
@@ -21,6 +23,8 @@ interface LocalScrapingToolDeps {
   ensureAgentRunning?: typeof ensureAgentRunning;
   loginToSite?: typeof loginToSite;
   hasCookies?: typeof hasCookies;
+  checkPlaywrightReady?: typeof checkPlaywrightReady;
+  checkForUpdates?: typeof checkForUpdates;
 }
 
 export function registerLocalScrapingTools(
@@ -36,9 +40,83 @@ export function registerLocalScrapingTools(
   const ensureAgentRunningImpl = deps.ensureAgentRunning ?? ensureAgentRunning;
   const loginToSiteImpl = deps.loginToSite ?? loginToSite;
   const hasCookiesImpl = deps.hasCookies ?? hasCookies;
+  const checkPlaywrightReadyImpl = deps.checkPlaywrightReady ?? checkPlaywrightReady;
+  const checkForUpdatesImpl = deps.checkForUpdates ?? checkForUpdates;
   const discoveryLogger = (payload: Record<string, unknown>) => {
     console.log(`[discover] ${JSON.stringify(payload)}`);
   };
+
+  server.addTool({
+    name: "check_for_updates",
+    description:
+      "Check whether a newer published version of the local JobJourney plugin is available and show the update command.",
+    parameters: z.object({}),
+    execute: async () => {
+      const result = await checkForUpdatesImpl();
+      const latestVersion = result.latestVersion || "unavailable";
+      const updateAvailable = result.error
+        ? "unknown"
+        : result.updateAvailable
+          ? "yes"
+          : "no";
+
+      return [
+        "# Plugin Update Status",
+        `- Current version: ${result.currentVersion}`,
+        `- Latest version: ${latestVersion}`,
+        `- Update available: ${updateAvailable}`,
+        result.error ? `- Check status: ${result.error}` : "",
+        result.updateAvailable
+          ? "- Update command: claude mcp remove jobjourney && claude mcp add jobjourney -e JOBJOURNEY_API_URL=https://server.jobjourney.me -e JOBJOURNEY_API_KEY=jj_your_api_key_here -e TRANSPORT=stdio -- npx -y jobjourney-claude-plugin"
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+    },
+  });
+
+  server.addTool({
+    name: "setup_local_scraping",
+    description:
+      "Prepare the local scraping environment. Initializes local SQLite, checks Playwright/browser readiness, starts the background agent if needed, reports login status for supported sites, and returns the next recommended commands.",
+    parameters: z.object({}),
+    execute: async () => {
+      const db = openDatabaseImpl();
+      try {
+        const dbPath = getDatabasePath(db);
+        const agentStarted = ensureAgentRunningImpl();
+        const playwright = await checkPlaywrightReadyImpl();
+
+        const seekLoggedIn = hasCookiesImpl("seek");
+        const linkedinLoggedIn = hasCookiesImpl("linkedin");
+        const missingSteps = [
+          ...(playwright.ready ? [] : ["Run: npx playwright install chromium"]),
+          ...(seekLoggedIn ? [] : ['Use login_jobsite with site "seek"']),
+        ];
+
+        return [
+          "# Local Scraping Setup",
+          "",
+          `- Database: ready (${dbPath})`,
+          `- Agent: ${agentStarted ? "started" : "already running"}`,
+          `- Playwright: ${playwright.ready ? "ready" : "not ready"}`,
+          playwright.details ? `- Playwright details: ${playwright.details}` : "",
+          "",
+          "## Login Status",
+          `- seek: ${seekLoggedIn ? "login saved" : "login required"}`,
+          `- linkedin: ${linkedinLoggedIn ? "login saved (optional for guest discovery)" : "not logged in (optional for guest discovery)"}`,
+          "",
+          "## Next Steps",
+          ...(missingSteps.length ? missingSteps.map((step) => `- ${step}`) : ["- Local scraping is ready."]),
+          '- Use discover_jobs with keyword "full stack", location "Sydney", sources ["linkedin", "seek"], pages 1',
+        ]
+          .filter(Boolean)
+          .join("\n");
+      } finally {
+        db.close();
+      }
+    },
+  });
 
   server.addTool({
     name: "scrape_jobs",
@@ -407,4 +485,60 @@ export function registerLocalScrapingTools(
       return ["# Login Status", "", ...status].join("\n");
     },
   });
+}
+
+async function checkPlaywrightReady(): Promise<{ ready: boolean; details: string }> {
+  let browser;
+  try {
+    browser = await chromium.launch({ headless: true });
+    return {
+      ready: true,
+      details: "Chromium launch check succeeded.",
+    };
+  } catch (error) {
+    return {
+      ready: false,
+      details: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    await browser?.close();
+  }
+}
+
+function getDatabasePath(db: ReturnType<typeof openDatabase>): string {
+  const databases = db.prepare("PRAGMA database_list").all() as Array<{
+    name: string;
+    file: string;
+  }>;
+  return databases.find((entry) => entry.name === "main")?.file || "unknown";
+}
+
+async function checkForUpdates(): Promise<{
+  currentVersion: string;
+  latestVersion: string;
+  updateAvailable: boolean;
+  error: string;
+}> {
+  try {
+    const response = await fetch(`https://registry.npmjs.org/${PLUGIN_NAME}/latest`);
+    if (!response.ok) {
+      throw new Error(`Registry responded with ${response.status}`);
+    }
+
+    const data = (await response.json()) as { version?: string };
+    const latestVersion = data.version ?? "";
+    return {
+      currentVersion: PLUGIN_VERSION,
+      latestVersion,
+      updateAvailable: Boolean(latestVersion && latestVersion !== PLUGIN_VERSION),
+      error: "",
+    };
+  } catch (error) {
+    return {
+      currentVersion: PLUGIN_VERSION,
+      latestVersion: "",
+      updateAvailable: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }

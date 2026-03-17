@@ -17,12 +17,13 @@ import { registerScrapingTools } from "./tools/scraping.js";
 import { registerAnalyticsTools } from "./tools/analytics.js";
 import { registerLocalScrapingTools } from "./tools/local-scraping.js";
 import { SessionAuth } from "./types.js";
+import { PLUGIN_NAME, PLUGIN_VERSION } from "./version.js";
 
 const transport = (process.env.TRANSPORT || "stdio") as "httpStream" | "stdio";
 
 const server = new FastMCP<SessionAuth>({
-  name: "jobjourney-claude-plugin",
-  version: "3.1.0",
+  name: PLUGIN_NAME,
+  version: PLUGIN_VERSION,
   ...(transport === "httpStream" && {
     authenticate: async (request: http.IncomingMessage): Promise<SessionAuth> => {
       const auth = request.headers.authorization;
