@@ -1,21 +1,24 @@
-name: Plugin CI/CD
+name: Test, Version Bump & Publish to npm
 
 on:
   push:
-    branches: [main, master]
-  workflow_dispatch:
+    branches: [master]
 
 jobs:
-  deploy:
+  publish:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
         run: npm ci
@@ -23,37 +26,25 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Deploy to Azure VM
-        env:
-          AZURE_VM_HOST: ${{ secrets.AZURE_VM_HOST }}
-          AZURE_VM_USER: ${{ secrets.AZURE_VM_USER }}
-          AZURE_VM_SSH_KEY: ${{ secrets.AZURE_VM_SSH_KEY }}
-          MCP_DEPLOY_PATH: /var/www/jobjourney-mcp
+      - name: Run tests
+        run: npm test
+
+      - name: Bump patch version
         run: |
-          # Store private key
-          echo "$AZURE_VM_SSH_KEY" > deploy.pem
-          chmod 600 deploy.pem
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          npm version patch --no-git-tag-version
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          echo "NEW_VERSION=$NEW_VERSION" >> "$GITHUB_ENV"
+          sed -i "s/export const PLUGIN_VERSION = .*/export const PLUGIN_VERSION = \"$NEW_VERSION\";/" src/version.ts
+          npm run build
+          git add package.json package-lock.json src/version.ts dist/
+          git commit -m "chore: bump version to $NEW_VERSION"
+          git tag "v$NEW_VERSION"
+          git push
+          git push --tags
 
-          # Create deploy directory on server
-          ssh -o StrictHostKeyChecking=no -i deploy.pem $AZURE_VM_USER@$AZURE_VM_HOST "sudo mkdir -p $MCP_DEPLOY_PATH && sudo chown $AZURE_VM_USER:$AZURE_VM_USER $MCP_DEPLOY_PATH"
-
-          # Copy built files (dist + package files)
-          scp -o StrictHostKeyChecking=no -i deploy.pem -r dist package.json package-lock.json $AZURE_VM_USER@$AZURE_VM_HOST:$MCP_DEPLOY_PATH/
-
-          # Install production dependencies and restart the MCP server
-          ssh -o StrictHostKeyChecking=no -i deploy.pem $AZURE_VM_USER@$AZURE_VM_HOST "cd $MCP_DEPLOY_PATH && npm ci --omit=dev && (pm2 restart jobjourney-mcp 2>/dev/null || pm2 start dist/index.js --name jobjourney-mcp)"
-
-          # Cleanup
-          rm deploy.pem
-
-      - name: Verify deployment
+      - name: Publish to npm
+        run: npm publish
         env:
-          AZURE_VM_HOST: ${{ secrets.AZURE_VM_HOST }}
-          AZURE_VM_USER: ${{ secrets.AZURE_VM_USER }}
-          AZURE_VM_SSH_KEY: ${{ secrets.AZURE_VM_SSH_KEY }}
-        run: |
-          echo "$AZURE_VM_SSH_KEY" > deploy.pem
-          chmod 600 deploy.pem
-          echo "Verifying MCP server deployment..."
-          ssh -o StrictHostKeyChecking=no -i deploy.pem $AZURE_VM_USER@$AZURE_VM_HOST "ls -la /var/www/jobjourney-mcp/ && node --version && curl -sf http://localhost:8080/health && echo ' - MCP server is running!'"
-          rm deploy.pem
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
