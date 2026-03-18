@@ -49,7 +49,15 @@ jobs:
           git push
           git push --tags
 
-      - name: Publish to npm
+      - name: Get OIDC token for npm
+        id: oidc
         run: |
-          npm config delete //registry.npmjs.org/:_authToken || true
-          npm publish --provenance --access public
+          OIDC_TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://registry.npmjs.org" | jq -r '.value')
+          echo "::add-mask::$OIDC_TOKEN"
+          echo "token=$OIDC_TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ steps.oidc.outputs.token }}
