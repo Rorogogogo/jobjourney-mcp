@@ -22,6 +22,7 @@ export interface LinkedInGuestSearchCard {
   location: string;
   jobUrl: string;
   postedAt: string | null;
+  companyLogoUrl: string;
 }
 
 export interface LinkedInGuestJobDetail {
@@ -35,6 +36,7 @@ export interface LinkedInGuestJobDetail {
   isEasyApply: boolean;
   jobUrl: string;
   applicantCount: string;
+  companyLogoUrl: string;
 }
 
 export class LinkedInGuestSource implements DiscoverySourceRunner {
@@ -87,6 +89,7 @@ export class LinkedInGuestSource implements DiscoverySourceRunner {
           job.atsIdentifier = detection.companyIdentifier || "";
           job.salary = detail.salary;
           job.applicantCount = detail.applicantCount;
+          job.companyLogoUrl = detail.companyLogoUrl || card.companyLogoUrl;
           jobs.push(job);
         } catch {
           jobs.push(
@@ -158,6 +161,7 @@ export function parseLinkedInGuestSearchResults(
         ]),
       ),
       postedAt: extractTimeDate(chunk),
+      companyLogoUrl: extractCompanyLogoUrl(chunk),
     });
     seen.add(jobId);
   }
@@ -198,6 +202,7 @@ export function parseLinkedInGuestJobDetail(
   const salary = extractSalary(html);
   const { applyUrl, isEasyApply } = extractApplyState(html);
   const applicantCount = extractApplicantCount(html);
+  const companyLogoUrl = extractCompanyLogoUrl(html);
 
   return {
     jobId: options.jobId,
@@ -210,7 +215,31 @@ export function parseLinkedInGuestJobDetail(
     isEasyApply,
     jobUrl: options.jobUrl ?? "",
     applicantCount,
+    companyLogoUrl,
   };
+}
+
+function extractCompanyLogoUrl(html: string): string {
+  const patterns = [
+    /<img[^>]*class=(['"])[^"']*artdeco-entity-image[^"']*\1[^>]*data-delayed-url=(['"])([^"']+)\2/i,
+    /<img[^>]*data-delayed-url=(['"])([^"']+)\1[^>]*class=(['"])[^"']*artdeco-entity-image[^"']*\3/i,
+    /<img[^>]*class=(['"])[^"']*artdeco-entity-image[^"']*\1[^>]*src=(['"])([^"']+)\2/i,
+    /<img[^>]*class=(['"])[^"']*evi-image[^"']*\1[^>]*data-delayed-url=(['"])([^"']+)\2/i,
+    /<img[^>]*class=(['"])[^"']*evi-image[^"']*\1[^>]*src=(['"])([^"']+)\2/i,
+    /<img[^>]*class=(['"])[^"']*company-logo[^"']*\1[^>]*src=(['"])([^"']+)\2/i,
+    /<img[^>]*class=(['"])[^"']*top-card-layout__entity-image[^"']*\1[^>]*data-delayed-url=(['"])([^"']+)\2/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (!match) continue;
+    const url = (match.at(-1) ?? "").trim();
+    if (url && !url.includes("data:image")) {
+      return url;
+    }
+  }
+
+  return "";
 }
 
 function extractApplyState(html: string): {

@@ -208,7 +208,7 @@ describe("registerLocalScrapingTools", () => {
     db.close();
   });
 
-  it("registers schedule_discovery and get_latest_discovery_report", async () => {
+  it("registers schedule_jobs and get_latest_discovery_report", async () => {
     const tools = new Map<string, any>();
     const server = {
       addTool(definition: any) {
@@ -224,7 +224,7 @@ describe("registerLocalScrapingTools", () => {
       getActiveDiscoverySourceNames: () => ["linkedin", "seek"],
     });
 
-    const scheduleTool = tools.get("schedule_discovery");
+    const scheduleTool = tools.get("schedule_jobs");
     expect(scheduleTool).toBeTruthy();
     const scheduleResult = await scheduleTool.execute({
       keyword: "full stack",
@@ -233,7 +233,7 @@ describe("registerLocalScrapingTools", () => {
       sources: ["linkedin", "seek"],
     });
 
-    expect(scheduleResult).toContain("Scheduled discovery");
+    expect(scheduleResult).toContain("Scheduled");
     expect(scheduleResult).toContain("linkedin, seek");
 
     const db = openDatabase(dbPath);

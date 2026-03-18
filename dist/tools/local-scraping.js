@@ -1,6 +1,5 @@
 import { chromium } from "playwright";
 import { z } from "zod";
-import { runScrape, getAvailableSources } from "../scraper/core/run-scrape.js";
 import { openDatabase } from "../storage/sqlite/db.js";
 import { JobsRepo } from "../storage/sqlite/jobs-repo.js";
 import { SchedulesRepo } from "../storage/sqlite/schedules-repo.js";
@@ -12,8 +11,6 @@ import { getActiveDiscoverySourceNames } from "../discovery/sources/registry.js"
 import { DiscoveryJobsRepo } from "../discovery/storage/discovery-jobs-repo.js";
 import { PLUGIN_NAME, PLUGIN_VERSION } from "../version.js";
 export function registerLocalScrapingTools(server, deps = {}) {
-    const runScrapeImpl = deps.runScrape ?? runScrape;
-    const getAvailableSourcesImpl = deps.getAvailableSources ?? getAvailableSources;
     const runDiscoveryImpl = deps.runDiscovery ?? runDiscovery;
     const getActiveDiscoverySourceNamesImpl = deps.getActiveDiscoverySourceNames ?? getActiveDiscoverySourceNames;
     const openDatabaseImpl = deps.openDatabase ?? openDatabase;
@@ -92,35 +89,8 @@ export function registerLocalScrapingTools(server, deps = {}) {
         },
     });
     server.addTool({
-        name: "scrape_jobs",
-        description: "Run a one-off local job scrape using Playwright. Scrapes job listings from the specified source and stores them locally in SQLite. Returns results as Markdown.",
-        parameters: z.object({
-            keyword: z.string().describe("Job search keyword, e.g. 'AI Engineer'"),
-            location: z.string().describe("Job location, e.g. 'Sydney'"),
-            source: z
-                .string()
-                .optional()
-                .default("seek")
-                .describe(`Job source to scrape. Available: ${getAvailableSourcesImpl().join(", ")}`),
-            maxPages: z
-                .number()
-                .optional()
-                .default(1)
-                .describe("Number of pages to scrape (default 1, max 30)"),
-        }),
-        execute: async (args) => {
-            const result = await runScrapeImpl({
-                keyword: args.keyword,
-                location: args.location,
-                source: args.source,
-                maxPages: Math.min(args.maxPages, 30),
-            });
-            return result.markdown;
-        },
-    });
-    server.addTool({
         name: "discover_jobs",
-        description: "Run the new multi-source discovery engine. Discovers jobs across enabled sources, enriches them, expands supported ATS providers, stores them locally in SQLite, and returns a structured JSON summary.",
+        description: "Discover jobs across enabled sources (LinkedIn, SEEK, etc.), enrich them with ATS detection, expand career pages, and store results locally in SQLite. Returns a structured JSON summary.",
         parameters: z.object({
             keyword: z.string().describe("Job search keyword, e.g. 'full stack'"),
             location: z.string().describe("Job location, e.g. 'Sydney'"),
@@ -130,9 +100,7 @@ export function registerLocalScrapingTools(server, deps = {}) {
                 .describe(`Discovery sources to run. Defaults to active sources: ${getActiveDiscoverySourceNamesImpl().join(", ")}`),
             pages: z
                 .number()
-                .optional()
-                .default(30)
-                .describe("Number of pages to fetch per source (default 30, max 30)"),
+                .describe("Number of pages to fetch per source (max 30). IMPORTANT: Always ask the user how many pages they want to scrape before calling this tool."),
         }),
         execute: async (args) => {
             const db = openDatabaseImpl();
@@ -153,7 +121,7 @@ export function registerLocalScrapingTools(server, deps = {}) {
                         keyword: args.keyword,
                         location: args.location,
                         sources: selectedSources,
-                        pages: Math.min(args.pages, 30),
+                        pages: Math.min(args.pages ?? 30, 30),
                     }, {
                         logger: discoveryLogger,
                     });
@@ -222,7 +190,7 @@ export function registerLocalScrapingTools(server, deps = {}) {
                     limit: args.limit,
                 });
                 if (jobs.length === 0) {
-                    return "No jobs found matching your criteria. Try running scrape_jobs first to collect job listings.";
+                    return "No jobs found matching your criteria. Try running discover_jobs first to collect job listings.";
                 }
                 const lines = jobs.map((job) => [
                     `## ${job.title}`,
@@ -241,53 +209,8 @@ export function registerLocalScrapingTools(server, deps = {}) {
         },
     });
     server.addTool({
-        name: "schedule_scraping",
-        description: "Schedule recurring local job scraping. Creates a schedule that runs automatically via the jobjourney-agent background process.",
-        parameters: z.object({
-            keyword: z.string().describe("Job search keyword, e.g. 'AI Engineer'"),
-            location: z.string().describe("Job location, e.g. 'Sydney'"),
-            time: z
-                .string()
-                .describe("Daily time to run in HH:mm format, e.g. '09:00'"),
-            source: z
-                .string()
-                .optional()
-                .default("seek")
-                .describe(`Job source. Available: ${getAvailableSourcesImpl().join(", ")}`),
-        }),
-        execute: async (args) => {
-            const [hourStr, minuteStr] = args.time.split(":");
-            const hour = parseInt(hourStr, 10);
-            const minute = parseInt(minuteStr, 10);
-            if (isNaN(hour) || isNaN(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
-                return `Invalid time format: ${args.time}. Use HH:mm (e.g. '09:00').`;
-            }
-            const cronExpr = `${minute} ${hour} * * *`;
-            const db = openDatabaseImpl();
-            try {
-                const repo = new SchedulesRepo(db);
-                const schedule = repo.create({
-                    keyword: args.keyword,
-                    location: args.location,
-                    source: args.source,
-                    cron: cronExpr,
-                });
-                ensureAgentRunningImpl();
-                return [
-                    `Scheduled "${args.keyword}" in ${args.location} (${args.source}) every day at ${args.time}.`,
-                    `Schedule ID: ${schedule.id}`,
-                    `Cron: ${cronExpr}`,
-                    `The jobjourney-agent background process will execute this automatically.`,
-                ].join("\n");
-            }
-            finally {
-                db.close();
-            }
-        },
-    });
-    server.addTool({
-        name: "schedule_discovery",
-        description: "Schedule recurring multi-source discovery. The jobjourney-agent will run the TS discovery engine daily at the requested time and store results locally.",
+        name: "schedule_jobs",
+        description: "Schedule recurring job discovery. The jobjourney-agent will run the discovery engine daily at the requested time across all specified sources and store results locally.",
         parameters: z.object({
             keyword: z.string().describe("Job search keyword, e.g. 'full stack'"),
             location: z.string().describe("Job location, e.g. 'Sydney'"),
@@ -295,7 +218,7 @@ export function registerLocalScrapingTools(server, deps = {}) {
             sources: z
                 .array(z.string())
                 .optional()
-                .describe(`Discovery sources to run. Defaults to active sources: ${getActiveDiscoverySourceNamesImpl().join(", ")}`),
+                .describe(`Sources to discover from. Defaults to active sources: ${getActiveDiscoverySourceNamesImpl().join(", ")}`),
         }),
         execute: async (args) => {
             const [hourStr, minuteStr] = args.time.split(":");
@@ -322,7 +245,7 @@ export function registerLocalScrapingTools(server, deps = {}) {
                 });
                 ensureAgentRunningImpl();
                 return [
-                    `Scheduled discovery for "${args.keyword}" in ${args.location} every day at ${args.time}.`,
+                    `Scheduled "${args.keyword}" in ${args.location} every day at ${args.time}.`,
                     `Sources: ${selectedSources.join(", ")}`,
                     `Schedule ID: ${schedule.id}`,
                     `Cron: ${cronExpr}`,
@@ -344,7 +267,7 @@ export function registerLocalScrapingTools(server, deps = {}) {
                 const runsRepo = new ScrapeRunsRepo(db);
                 const latestRun = runsRepo.getLatestDiscoveryRun();
                 if (!latestRun) {
-                    return "No discovery runs found. Run discover_jobs or schedule_discovery first.";
+                    return "No discovery runs found. Run discover_jobs or schedule_jobs first.";
                 }
                 const jobs = db
                     .prepare(`SELECT title, company, location, source, COALESCE(job_url, url) AS job_url, external_url, ats_type

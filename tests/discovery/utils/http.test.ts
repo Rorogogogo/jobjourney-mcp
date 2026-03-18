@@ -34,21 +34,70 @@ describe("HttpClient", () => {
     expect(init?.headers).toMatchObject(DEFAULT_HEADERS);
   });
 
-  it("retries one time for transient 429 responses", async () => {
+  it("retries on transient 429 responses with exponential backoff", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(new Response("busy", { status: 429 }))
       .mockResolvedValueOnce(new Response("ok", { status: 200 }));
     globalThis.fetch = fetchMock as typeof fetch;
 
+    const sleepMock = vi.fn(async () => {});
     const client = new HttpClient({
       rateLimiter: { wait: async () => {} },
-      retryDelayMs: 1,
+      retryDelayMs: 1000,
+      maxRetries: 3,
+      sleep: sleepMock,
     });
 
     const response = await client.getText("https://example.com/jobs");
 
     expect(response).toBe("ok");
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    // First retry: retryDelayMs * 2^0 = 1000
+    expect(sleepMock).toHaveBeenCalledWith(1000);
+  });
+
+  it("retries up to maxRetries times with increasing delays", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("busy", { status: 429 }))
+      .mockResolvedValueOnce(new Response("busy", { status: 429 }))
+      .mockResolvedValueOnce(new Response("busy", { status: 429 }))
+      .mockResolvedValueOnce(new Response("ok", { status: 200 }));
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const sleepMock = vi.fn(async () => {});
+    const client = new HttpClient({
+      rateLimiter: { wait: async () => {} },
+      retryDelayMs: 1000,
+      maxRetries: 3,
+      sleep: sleepMock,
+    });
+
+    const response = await client.getText("https://example.com/jobs");
+
+    expect(response).toBe("ok");
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    // Exponential backoff: 1000, 2000, 4000
+    expect(sleepMock).toHaveBeenNthCalledWith(1, 1000);
+    expect(sleepMock).toHaveBeenNthCalledWith(2, 2000);
+    expect(sleepMock).toHaveBeenNthCalledWith(3, 4000);
+  });
+
+  it("throws after exhausting all retries", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("busy", { status: 429 }));
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const client = new HttpClient({
+      rateLimiter: { wait: async () => {} },
+      retryDelayMs: 1,
+      maxRetries: 2,
+      sleep: async () => {},
+    });
+
+    await expect(client.getText("https://example.com/jobs")).rejects.toThrow("HTTP 429");
+    expect(fetchMock).toHaveBeenCalledTimes(3); // 1 initial + 2 retries
   });
 });

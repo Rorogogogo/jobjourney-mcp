@@ -8,6 +8,10 @@ const PANEL_MAX_WAIT_MS = 3000;
 const PANEL_MAX_ATTEMPTS = 25;
 const PANEL_BACKOFF_MULTIPLIER = 1.5;
 const POST_PANEL_RENDER_MS = 500;
+const PAGE_MAX_RETRIES = 3;
+const PAGE_RETRY_DELAY_MS = 3000;
+const TOTAL_SCRAPE_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+const CARD_TIMEOUT_MS = 30_000; // 30 seconds per card
 function sleep(ms) {
     return new Promise((r) => setTimeout(r, ms));
 }
@@ -15,17 +19,35 @@ export class SeekScraper {
     async scrape(request) {
         const browser = await launchBrowser();
         const context = await createAuthenticatedContext(browser, "seek");
+        const scrapeStart = Date.now();
         try {
             const page = await context.newPage();
             const maxPages = request.maxPages ?? 1;
             const allJobs = [];
             for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+                if (Date.now() - scrapeStart > TOTAL_SCRAPE_TIMEOUT_MS)
+                    break;
                 const url = buildSeekUrl(request.keyword, request.location, pageNum);
-                await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
-                if (pageNum > 1)
-                    await sleep(PAGE_NAV_DELAY_MS);
-                await scrollToBottom(page);
-                const pageJobs = await scrapePageWithClickThrough(page);
+                let pageJobs = [];
+                for (let retry = 0; retry <= PAGE_MAX_RETRIES; retry++) {
+                    if (Date.now() - scrapeStart > TOTAL_SCRAPE_TIMEOUT_MS)
+                        break;
+                    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+                    if (pageNum > 1 || retry > 0)
+                        await sleep(PAGE_NAV_DELAY_MS);
+                    await scrollToBottom(page);
+                    const blocked = await isPageBlocked(page);
+                    if (blocked && retry < PAGE_MAX_RETRIES) {
+                        await sleep(PAGE_RETRY_DELAY_MS * Math.pow(2, retry));
+                        continue;
+                    }
+                    pageJobs = await scrapePageWithClickThrough(page, scrapeStart);
+                    if (pageJobs.length === 0 && retry < PAGE_MAX_RETRIES) {
+                        await sleep(PAGE_RETRY_DELAY_MS * Math.pow(2, retry));
+                        continue;
+                    }
+                    break;
+                }
                 if (pageJobs.length === 0)
                     break;
                 allJobs.push(...pageJobs);
@@ -52,6 +74,17 @@ export async function scrapeSeekPage(page, request) {
     }
     return extractBasicJobsFromCards(page);
 }
+async function isPageBlocked(page) {
+    return page.evaluate(() => {
+        const body = document.body?.textContent?.toLowerCase() ?? "";
+        return (body.includes("access denied") ||
+            body.includes("rate limit") ||
+            body.includes("too many requests") ||
+            body.includes("captcha") ||
+            body.includes("please verify") ||
+            document.querySelector('[data-automation="errorPage"]') !== null);
+    });
+}
 async function scrollToBottom(page) {
     for (let i = 0; i < 3; i++) {
         await page.evaluate(() => window.scrollBy(0, window.innerHeight));
@@ -60,7 +93,7 @@ async function scrollToBottom(page) {
     await page.evaluate(() => window.scrollTo(0, 0));
     await sleep(300);
 }
-async function scrapePageWithClickThrough(page) {
+async function scrapePageWithClickThrough(page, scrapeStart) {
     await page
         .waitForSelector('[data-testid="job-card"], article[data-card-type="JobCard"]', { timeout: 15000 })
         .catch(() => null);
@@ -69,31 +102,12 @@ async function scrapePageWithClickThrough(page) {
         .all();
     const jobs = [];
     for (const card of cards.slice(0, 30)) {
+        if (Date.now() - scrapeStart > TOTAL_SCRAPE_TIMEOUT_MS)
+            break;
         try {
-            // 1. Extract basic info from card
-            const basicInfo = await extractBasicInfoFromCard(card);
-            if (!basicInfo.title || !basicInfo.url)
-                continue;
-            // 2. Click the job card to open detail panel
-            const clickTarget = card.locator('[data-testid="job-card-title"], a[data-automation="jobTitle"]').first();
-            await clickTarget.click().catch(() => card.click());
-            // 3. Wait for detail panel with exponential backoff
-            const panelLoaded = await waitForDetailPanel(page);
-            if (panelLoaded) {
-                // 4. Extract full details from panel
-                const details = await extractDetailPanel(page, basicInfo);
-                jobs.push(details);
-            }
-            else {
-                // Fallback to basic info
-                jobs.push({
-                    title: basicInfo.title || "",
-                    company: basicInfo.company || "",
-                    location: basicInfo.location || "",
-                    url: basicInfo.url || "",
-                    source: "seek",
-                    scrapedAt: new Date().toISOString(),
-                });
+            const cardJob = await withTimeout(processCard(page, card), CARD_TIMEOUT_MS);
+            if (cardJob) {
+                jobs.push(cardJob);
             }
             await sleep(BASE_DELAY_MS);
         }
@@ -102,6 +116,36 @@ async function scrapePageWithClickThrough(page) {
         }
     }
     return jobs;
+}
+async function processCard(page, card) {
+    // 1. Extract basic info from card
+    const basicInfo = await extractBasicInfoFromCard(card);
+    if (!basicInfo.title || !basicInfo.url)
+        return null;
+    // 2. Click the job card to open detail panel
+    const clickTarget = card.locator('[data-testid="job-card-title"], a[data-automation="jobTitle"]').first();
+    await clickTarget.click().catch(() => card.click());
+    // 3. Wait for detail panel with exponential backoff
+    const panelLoaded = await waitForDetailPanel(page);
+    if (panelLoaded) {
+        // 4. Extract full details from panel
+        return extractDetailPanel(page, basicInfo);
+    }
+    // Fallback to basic info
+    return {
+        title: basicInfo.title || "",
+        company: basicInfo.company || "",
+        location: basicInfo.location || "",
+        url: basicInfo.url || "",
+        source: "seek",
+        scrapedAt: new Date().toISOString(),
+    };
+}
+function withTimeout(promise, ms) {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(`Card timed out after ${ms}ms`)), ms);
+        promise.then((value) => { clearTimeout(timer); resolve(value); }, (err) => { clearTimeout(timer); reject(err); });
+    });
 }
 async function waitForDetailPanel(page) {
     let waitTime = PANEL_INITIAL_WAIT_MS;

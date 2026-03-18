@@ -107,7 +107,6 @@ export class ScrapeRunsRepo {
         .prepare(
           `SELECT id, keyword, location, source, run_mode, sources, status, started_at, finished_at, job_count, error
            FROM scrape_runs
-           WHERE run_mode = 'discover'
            ORDER BY id DESC
            LIMIT 1`,
         )

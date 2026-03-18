@@ -95,7 +95,6 @@ describe("AgentScheduler", () => {
       expandedCompanies: [],
     }));
     const scheduler = new AgentScheduler(dbPath, {
-      runScrape: vi.fn(async () => ({ jobs: [], markdown: "", runId: 1 })),
       runDiscovery,
     });
 

@@ -1,13 +1,11 @@
 import cron from "node-cron";
 import { openDatabase } from "../storage/sqlite/db.js";
 import { SchedulesRepo } from "../storage/sqlite/schedules-repo.js";
-import { runScrape } from "../scraper/core/run-scrape.js";
 import { runDiscovery } from "../discovery/core/run-discovery.js";
 import { DiscoveryJobsRepo } from "../discovery/storage/discovery-jobs-repo.js";
 import { ScrapeRunsRepo } from "../storage/sqlite/scrape-runs-repo.js";
 
 interface AgentSchedulerDeps {
-  runScrape?: typeof runScrape;
   runDiscovery?: typeof runDiscovery;
 }
 
@@ -19,12 +17,10 @@ interface ScheduledTask {
 export class AgentScheduler {
   private tasks: Map<number, ScheduledTask> = new Map();
   private dbPath?: string;
-  private readonly runScrapeImpl: typeof runScrape;
   private readonly runDiscoveryImpl: typeof runDiscovery;
 
   constructor(dbPath?: string, deps: AgentSchedulerDeps = {}) {
     this.dbPath = dbPath;
-    this.runScrapeImpl = deps.runScrape ?? runScrape;
     this.runDiscoveryImpl = deps.runDiscovery ?? runDiscovery;
   }
 
@@ -67,47 +63,45 @@ export class AgentScheduler {
     keyword: string,
     location: string,
     source: string,
-    runMode: string,
+    _runMode: string,
     sources: string | null,
   ): Promise<void> {
     const db = openDatabase(this.dbPath);
     const runsRepo = new ScrapeRunsRepo(db);
+    const selectedSources = sources
+      ? sources.split(",").map((v) => v.trim()).filter(Boolean)
+      : [source];
     const run = runsRepo.createRun({
       scheduleId: id,
       keyword,
       location,
-      source,
-      runMode: runMode === "discover" ? "discover" : "scrape",
-      sources: sources ?? undefined,
+      source: "discover",
+      runMode: "discover",
+      sources: selectedSources.join(","),
     });
 
     try {
-      if (runMode === "discover") {
-        const result = await this.runDiscoveryImpl({
-          keyword,
-          location,
-          sources: sources ? sources.split(",").map((value) => value.trim()).filter(Boolean) as any : undefined,
-          pages: 30,
-        }, {
-          logger: this.discoveryLogger,
-        });
-        new DiscoveryJobsRepo(db).upsertJobs(result.jobs, {
-          keyword,
-          location,
-          runId: run.id,
-        });
-        runsRepo.finishRun(run.id, { status: "success", jobCount: result.jobs.length });
-      } else {
-        await this.runScrapeImpl({ keyword, location, source, dbPath: this.dbPath });
-        runsRepo.finishRun(run.id, { status: "success" });
-      }
+      const result = await this.runDiscoveryImpl({
+        keyword,
+        location,
+        sources: selectedSources as any,
+        pages: 30,
+      }, {
+        logger: this.discoveryLogger,
+      });
+      new DiscoveryJobsRepo(db).upsertJobs(result.jobs, {
+        keyword,
+        location,
+        runId: run.id,
+      });
+      runsRepo.finishRun(run.id, { status: "success", jobCount: result.jobs.length });
       new SchedulesRepo(db).updateLastRunAt(id);
     } catch (error) {
       runsRepo.finishRun(run.id, {
         status: "error",
         error: error instanceof Error ? error.message : String(error),
       });
-      console.error(`[agent] scrape failed for schedule ${id}:`, error);
+      console.error(`[agent] discovery failed for schedule ${id}:`, error);
     } finally {
       db.close();
     }

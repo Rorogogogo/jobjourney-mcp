@@ -8,6 +8,7 @@ export interface LinkedInGuestSearchCard {
     location: string;
     jobUrl: string;
     postedAt: string | null;
+    companyLogoUrl: string;
 }
 export interface LinkedInGuestJobDetail {
     jobId: string;
@@ -20,6 +21,7 @@ export interface LinkedInGuestJobDetail {
     isEasyApply: boolean;
     jobUrl: string;
     applicantCount: string;
+    companyLogoUrl: string;
 }
 export declare class LinkedInGuestSource implements DiscoverySourceRunner {
     private readonly httpClient;

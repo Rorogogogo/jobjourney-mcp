@@ -40,8 +40,8 @@ export class HttpClient {
   constructor(options: HttpClientOptions = {}) {
     this.rateLimiter = options.rateLimiter ?? new RateLimiter();
     this.timeoutMs = options.timeoutMs ?? 20_000;
-    this.maxRetries = options.maxRetries ?? 1;
-    this.retryDelayMs = options.retryDelayMs ?? 500;
+    this.maxRetries = options.maxRetries ?? 3;
+    this.retryDelayMs = options.retryDelayMs ?? 1000;
     this.headers = { ...DEFAULT_HEADERS, ...(options.headers ?? {}) };
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.sleep = options.sleep ?? defaultSleep;
@@ -73,7 +73,7 @@ export class HttpClient {
 
         if (RETRY_STATUS_CODES.has(response.status) && attempt < this.maxRetries) {
           attempt += 1;
-          await this.sleep(this.retryDelayMs);
+          await this.sleep(this.retryDelayMs * Math.pow(2, attempt - 1));
           continue;
         }
 
@@ -88,7 +88,7 @@ export class HttpClient {
           throw error;
         }
         attempt += 1;
-        await this.sleep(this.retryDelayMs);
+        await this.sleep(this.retryDelayMs * Math.pow(2, attempt - 1));
       }
     }
 
