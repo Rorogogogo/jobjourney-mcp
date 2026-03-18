@@ -6,7 +6,6 @@ on:
 
 permissions:
   contents: write
-  id-token: write
 
 jobs:
   publish:
@@ -49,29 +48,7 @@ jobs:
           git push
           git push --tags
 
-      - name: Exchange OIDC token for npm publish token
-        id: npm-token
-        run: |
-          OIDC_TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://registry.npmjs.org" | jq -r '.value')
-          echo "OIDC token length: ${#OIDC_TOKEN}"
-          EXCHANGE_RESPONSE=$(curl -sS -w "\nHTTP_STATUS:%{http_code}" -X POST \
-            "https://registry.npmjs.org/-/npm/v1/security/oidc/token" \
-            -H "Content-Type: application/json" \
-            -d "{\"token\": \"$OIDC_TOKEN\"}")
-          HTTP_STATUS=$(echo "$EXCHANGE_RESPONSE" | tail -1 | sed 's/HTTP_STATUS://')
-          RESPONSE_BODY=$(echo "$EXCHANGE_RESPONSE" | sed '$d')
-          echo "Exchange HTTP status: $HTTP_STATUS"
-          echo "Exchange response: $RESPONSE_BODY"
-          NPM_TOKEN=$(echo "$RESPONSE_BODY" | jq -r '.token // empty')
-          if [ -z "$NPM_TOKEN" ]; then
-            echo "ERROR: Failed to get npm token from OIDC exchange"
-            exit 1
-          fi
-          echo "::add-mask::$NPM_TOKEN"
-          echo "token=$NPM_TOKEN" >> "$GITHUB_OUTPUT"
-
       - name: Publish to npm
-        run: npm publish --provenance --access public
+        run: npm publish --access public
         env:
-          NODE_AUTH_TOKEN: ${{ steps.npm-token.outputs.token }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
