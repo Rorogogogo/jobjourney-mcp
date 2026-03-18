@@ -1,6 +1,6 @@
 {
   "name": "jobjourney-claude-plugin",
-  "version": "3.1.0",
+  "version": "3.1.2",
   "description": "FastMCP server for JobJourney - save jobs, track applications, AI job fit evaluation, cover letter generation, interview prep, coffee chat networking, and more",
   "main": "dist/index.js",
   "bin": {
@@ -11,7 +11,13 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsc && node dist/index.js",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "parity:discovery": "npm run build && node dist/discovery/parity/cli.js",
+    "parity:live-smoke": "npm run build && node dist/discovery/parity/live-smoke-cli.js",
+    "agent": "node dist/agent/index.js",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "mcp",
@@ -39,11 +45,17 @@
     "node": ">=18"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
     "@types/node": "^20.0.0",
-    "typescript": "^5.0.0"
+    "@types/node-cron": "^3.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0"
   },
   "dependencies": {
+    "better-sqlite3": "^11.0.0",
     "fastmcp": "^3.33.0",
+    "node-cron": "^3.0.0",
+    "playwright": "^1.50.0",
     "zod": "^4.3.6"
   }
 }
