@@ -42,7 +42,7 @@
     "README.md"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",
@@ -52,7 +52,7 @@
     "vitest": "^3.0.0"
   },
   "dependencies": {
-    "better-sqlite3": "^11.0.0",
+    "better-sqlite3": "^12.4.5",
     "fastmcp": "^3.33.0",
     "node-cron": "^3.0.0",
     "playwright": "^1.50.0",

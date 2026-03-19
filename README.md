@@ -4,7 +4,7 @@
 
 [![npm version](https://img.shields.io/npm/v/jobjourney-claude-plugin)](https://www.npmjs.com/package/jobjourney-claude-plugin)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)
+![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)
 ![Protocol](https://img.shields.io/badge/protocol-MCP-7c3aed)
 [![GitHub stars](https://img.shields.io/github/stars/Rorogogogo/jobjourney-claude-plugin?style=social)](https://github.com/Rorogogogo/jobjourney-claude-plugin)
 
@@ -38,52 +38,9 @@ If you want product screenshots or GIFs later, this is the right place to add th
 
 ---
 
-## 🧭 Remote Vs Local
-
-This project has two distinct usage modes.
-
-| Mode | Best for | Includes |
-|---|---|---|
-| **Remote MCP** | Fastest setup, cloud-backed JobJourney tools | Job tracking, AI tools, documents, networking, profile, analytics |
-| **Local plugin / stdio** | Full local scraping and scheduled discovery | Everything above, plus `discover_jobs`, `search_jobs`, `schedule_discovery`, `login_jobsite`, local SQLite |
-
-Important:
-
-- **Local scraping requires the local plugin**, not just the hosted MCP endpoint.
-- **LinkedIn discovery** uses direct HTTP guest scraping.
-- **SEEK discovery** uses Playwright and local browser session support.
-
----
-
 ## 📦 Installation
 
-### Option A: Remote MCP
-
-Use this if you want the hosted JobJourney tools with the least setup.
-
-```bash
-claude mcp add jobjourney -t url -h "X-API-Key: jj_your_api_key_here" https://server.jobjourney.me/mcp
-```
-
-Or add it manually to `~/.claude.json`:
-
-```json
-{
-  "mcpServers": {
-    "jobjourney": {
-      "type": "url",
-      "url": "https://server.jobjourney.me/mcp",
-      "headers": {
-        "X-API-Key": "jj_your_api_key_here"
-      }
-    }
-  }
-}
-```
-
-### Option B: Local stdio plugin
-
-Use this if you want local discovery, Playwright-backed scraping, scheduling, and SQLite storage.
+### Option A: Claude Code
 
 ```bash
 claude mcp add jobjourney \
@@ -93,7 +50,9 @@ claude mcp add jobjourney \
   -- npx -y jobjourney-claude-plugin
 ```
 
-If you prefer Claude Desktop config:
+### Option B: Claude Desktop
+
+Add this to your Claude Desktop config file (`claude_desktop_config.json`):
 
 ```json
 {
