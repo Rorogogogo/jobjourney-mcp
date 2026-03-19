@@ -19,23 +19,30 @@ const transport = (process.env.TRANSPORT || "stdio");
 const server = new FastMCP({
     name: PLUGIN_NAME,
     version: PLUGIN_VERSION,
-    ...(transport === "httpStream" && {
-        authenticate: async (request) => {
-            const auth = request.headers.authorization;
-            const xApiKey = request.headers["x-api-key"];
-            let apiKey;
-            if (auth && auth.startsWith("Bearer ")) {
-                apiKey = auth.slice(7).trim();
+    authenticate: async (request) => {
+        // stdio transport: request is undefined, read API key from env
+        if (!request) {
+            const envKey = process.env.JOBJOURNEY_API_KEY;
+            if (!envKey) {
+                throw new Error("Missing JOBJOURNEY_API_KEY environment variable for stdio transport.");
             }
-            else if (typeof xApiKey === "string") {
-                apiKey = xApiKey.trim();
-            }
-            if (!apiKey) {
-                throw new Error("Missing API key. Provide Authorization: Bearer <key> or X-API-Key header.");
-            }
-            return { apiKey };
-        },
-    }),
+            return { apiKey: envKey };
+        }
+        // HTTP transport: read API key from headers
+        const auth = request.headers.authorization;
+        const xApiKey = request.headers["x-api-key"];
+        let apiKey;
+        if (auth && auth.startsWith("Bearer ")) {
+            apiKey = auth.slice(7).trim();
+        }
+        else if (typeof xApiKey === "string") {
+            apiKey = xApiKey.trim();
+        }
+        if (!apiKey) {
+            throw new Error("Missing API key. Provide Authorization: Bearer <key> or X-API-Key header.");
+        }
+        return { apiKey };
+    },
 });
 registerJobTools(server);
 registerDashboardTools(server);
