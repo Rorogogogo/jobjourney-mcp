@@ -48,6 +48,13 @@ jobs:
           git push
           git push --tags
 
+      - name: Verify npm auth
+        run: |
+          npm whoami
+          npm access list packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Publish to npm
         run: npm publish --access public
         env:
