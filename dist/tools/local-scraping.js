@@ -101,6 +101,11 @@ export function registerLocalScrapingTools(server, deps = {}) {
             pages: z
                 .number()
                 .describe("Number of pages to fetch per source (max 30). IMPORTANT: Always ask the user how many pages they want to scrape before calling this tool."),
+            career_discovery: z
+                .boolean()
+                .optional()
+                .default(true)
+                .describe("When LinkedIn hides external apply URLs, probe company career pages to find ATS links (Greenhouse, Lever, etc.). Enabled by default."),
         }),
         execute: async (args) => {
             const db = openDatabaseImpl();
@@ -122,6 +127,7 @@ export function registerLocalScrapingTools(server, deps = {}) {
                         location: args.location,
                         sources: selectedSources,
                         pages: Math.min(args.pages ?? 30, 30),
+                        careerDiscovery: args.career_discovery ?? true,
                     }, {
                         logger: discoveryLogger,
                     });
