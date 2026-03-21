@@ -47,7 +47,7 @@ claude mcp add jobjourney \
   -e JOBJOURNEY_API_URL=https://server.jobjourney.me \
   -e JOBJOURNEY_API_KEY=jj_your_api_key_here \
   -e TRANSPORT=stdio \
-  -- npx -y jobjourney-claude-plugin
+  -- npx -y jobjourney-claude-plugin@latest
 ```
 
 ### Option B: Claude Desktop
@@ -59,7 +59,7 @@ Add this to your Claude Desktop config file (`claude_desktop_config.json`):
   "mcpServers": {
     "jobjourney": {
       "command": "npx",
-      "args": ["-y", "jobjourney-claude-plugin"],
+      "args": ["-y", "jobjourney-claude-plugin@latest"],
       "env": {
         "JOBJOURNEY_API_URL": "https://server.jobjourney.me",
         "JOBJOURNEY_API_KEY": "jj_your_api_key_here",
@@ -89,7 +89,7 @@ claude mcp add jobjourney \
   -e JOBJOURNEY_API_URL=https://server.jobjourney.me \
   -e JOBJOURNEY_API_KEY=jj_your_api_key_here \
   -e TRANSPORT=stdio \
-  -- npx -y jobjourney-claude-plugin
+  -- npx -y jobjourney-claude-plugin@latest
 ```
 
 ### 2. Log in to browser-backed sites when needed

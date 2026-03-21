@@ -137,7 +137,7 @@ describe("registerLocalScrapingTools", () => {
       expect(logSpy).not.toHaveBeenCalledWith(
         expect.stringContaining("[discover]"),
       );
-      expect(errorSpy).toHaveBeenCalledWith(
+      expect(errorSpy).not.toHaveBeenCalledWith(
         expect.stringContaining("[discover]"),
       );
     } finally {
