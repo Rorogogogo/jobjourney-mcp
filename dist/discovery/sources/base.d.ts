@@ -4,6 +4,11 @@ export interface DiscoverSourceRequest {
     location: string;
     pages: number;
     extractedAt: string;
+    onProgress?: (info: {
+        page: number;
+        totalPages: number;
+        jobsFound: number;
+    }) => void;
 }
 export interface DiscoverySourceRunner {
     name: DiscoverySourceName;

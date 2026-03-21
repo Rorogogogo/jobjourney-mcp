@@ -69,6 +69,15 @@ export async function runDiscovery(options, dependencies = {}) {
                 location: options.location,
                 pages: options.pages ?? 30,
                 extractedAt: extractedAtFactory(),
+                onProgress: (info) => {
+                    logger?.({
+                        event: "discovery_source_page",
+                        source: sourceName,
+                        page: info.page,
+                        totalPages: info.totalPages,
+                        jobsFound: info.jobsFound,
+                    });
+                },
             });
             logger?.({
                 event: "discovery_source_success",

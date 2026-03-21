@@ -60,6 +60,12 @@ export class LinkedInGuestSource implements DiscoverySourceRunner {
         break;
       }
 
+      request.onProgress?.({
+        page: pageIndex + 1,
+        totalPages: request.pages,
+        jobsFound: jobs.length + cards.length,
+      });
+
       for (const card of cards) {
         try {
           const detailHtml = await this.httpClient.getText(
