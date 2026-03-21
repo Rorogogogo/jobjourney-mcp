@@ -14,5 +14,7 @@ export interface RunDiscoveryDependencies {
     httpClient?: HttpClient;
     careerDiscoverer?: CompanyCareerDiscovererLike;
     logger?: (payload: Record<string, unknown>) => void;
+    /** Called after each source completes with its batch of jobs, enabling incremental persistence. */
+    onJobsBatch?: (jobs: DiscoveryJob[], source: DiscoverySourceName) => void;
 }
 export declare function runDiscovery(options: DiscoveryRunOptions, dependencies?: RunDiscoveryDependencies): Promise<DiscoveryRunResult>;

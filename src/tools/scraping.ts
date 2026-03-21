@@ -11,23 +11,22 @@ export function registerScrapingTools(server: FastMCP<SessionAuth>) {
     execute: async (_args, context) => {
       const apiKey = context.session?.apiKey;
       const data = (await apiCall("/api/scraping-statistics", {}, apiKey)) as {
-        data?: {
-          totalJobsScraped?: number; totalSessions?: number;
-          websites?: Array<{ name: string; jobCount: number }>;
-        };
+        items?: Array<{
+          id: string; country?: string; jobTitle?: string; location?: string;
+          platforms?: string; jobsFound: number; totalScrapedCount: number;
+          createdOnUtc: string;
+        }>;
+        totalCount?: number;
       };
 
-      const stats = data.data;
-      if (!stats) return "Could not retrieve scraping statistics.";
+      const items = data.items || [];
+      if (items.length === 0) return "No scraping statistics found.";
 
-      const websites = stats.websites?.map((w, i) => `  ${i + 1}. ${w.name}: ${w.jobCount} jobs`).join("\n") || "  None";
+      const list = items.map((s, i) =>
+        `${i + 1}. ${s.jobTitle || "Unknown"} in ${s.location || "Unknown"} (${s.platforms || "N/A"})\n   Found: ${s.jobsFound} | Scraped: ${s.totalScrapedCount} | ${new Date(s.createdOnUtc).toLocaleDateString()}`
+      ).join("\n\n");
 
-      return [
-        "Scraping Statistics",
-        `Total jobs scraped: ${stats.totalJobsScraped ?? 0}`,
-        `Total sessions: ${stats.totalSessions ?? 0}`,
-        `\nBy Website:\n${websites}`,
-      ].join("\n");
+      return `Scraping Statistics (${data.totalCount || items.length} entries):\n\n${list}`;
     },
   });
 
@@ -38,11 +37,11 @@ export function registerScrapingTools(server: FastMCP<SessionAuth>) {
     execute: async (_args, context) => {
       const apiKey = context.session?.apiKey;
       const data = (await apiCall("/api/scraping-statistics/aggregated", {}, apiKey)) as {
-        data?: unknown;
+        jobsFound?: number; totalScrapedCount?: number;
       };
 
-      if (!data.data) return "Could not retrieve aggregated scraping statistics.";
-      return typeof data.data === "string" ? data.data : JSON.stringify(data.data, null, 2);
+      if (!data) return "Could not retrieve aggregated scraping statistics.";
+      return `Aggregated Scraping Stats:\n  Total jobs found: ${data.jobsFound ?? 0}\n  Total scraped: ${data.totalScrapedCount ?? 0}`;
     },
   });
 }

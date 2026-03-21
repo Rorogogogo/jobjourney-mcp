@@ -31,6 +31,8 @@ export interface RunDiscoveryDependencies {
   httpClient?: HttpClient;
   careerDiscoverer?: CompanyCareerDiscovererLike;
   logger?: (payload: Record<string, unknown>) => void;
+  /** Called after each source completes with its batch of jobs, enabling incremental persistence. */
+  onJobsBatch?: (jobs: DiscoveryJob[], source: DiscoverySourceName) => void;
 }
 
 export async function runDiscovery(
@@ -202,8 +204,14 @@ export async function runDiscovery(
     if (result.success) {
       successfulSources.push(result.sourceName);
       expandedCompanies.push(...result.expandedCompanies);
+      const batchJobs: DiscoveryJob[] = [];
       for (const job of result.jobs) {
-        pushJob(jobs, seenJobs, job);
+        if (pushJob(jobs, seenJobs, job)) {
+          batchJobs.push(job);
+        }
+      }
+      if (batchJobs.length > 0) {
+        dependencies.onJobsBatch?.(batchJobs, result.sourceName);
       }
     } else {
       failedSources.push(result.sourceName);
@@ -294,13 +302,14 @@ function pushJob(
   jobs: DiscoveryJob[],
   seenJobs: Set<string>,
   job: DiscoveryJob,
-): void {
+): boolean {
   const key = `${job.source}:${job.id || job.jobUrl || job.externalUrl}`;
   if (seenJobs.has(key)) {
-    return;
+    return false;
   }
   seenJobs.add(key);
   jobs.push(job);
+  return true;
 }
 
 function isSupportedAts(atsType: DiscoveryJob["atsType"]): atsType is AtsProviderName {

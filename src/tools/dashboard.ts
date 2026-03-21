@@ -11,24 +11,19 @@ export function registerDashboardTools(server: FastMCP<SessionAuth>) {
     parameters: z.object({}),
     execute: async (_args, context) => {
       const apiKey = context.session?.apiKey;
-      const data = (await apiCall("/api/dashboard/statistics", {}, apiKey)) as {
-        data?: {
-          jobStatistics?: {
-            total: number; applied: number; interview: number;
-            offer: number; rejected: number; starred: number; savedOnly: number;
-          };
-          scrapingMetrics?: {
-            totalJobsScraped: number; totalWebsites: number;
-            averageJobsPerScrape: number; successRate: number;
-          };
-          documentStatistics?: { totalCvs: number; totalCoverLetters: number };
-          portfolioMetrics?: { visitsThisMonth: number };
-          featureUsage?: Record<string, number>;
+      const stats = (await apiCall("/api/dashboard/statistics", {}, apiKey)) as {
+        jobStatistics?: {
+          total: number; applied: number; initialInterview: number; finalInterview: number;
+          offer: number; rejected: number; starred: number; savedOnly: number;
         };
+        scrapingMetrics?: { totalJobsScraped: number };
+        documentStatistics?: { totalCvs: number; totalCoverLetters: number };
+        portfolioMetrics?: { visitCount: number };
+        featureUsage?: Record<string, number>;
+        errorCode?: string | null;
       };
 
-      const stats = data.data;
-      if (!stats) return "Could not retrieve dashboard statistics.";
+      if (stats.errorCode) return "Could not retrieve dashboard statistics.";
 
       const js = stats.jobStatistics;
       const sm = stats.scrapingMetrics;
@@ -39,12 +34,12 @@ export function registerDashboardTools(server: FastMCP<SessionAuth>) {
         "═══════════════════════",
         "",
         "Jobs Overview:",
-        js ? `  Total: ${js.total} | Applied: ${js.applied} | Interview: ${js.interview}` : null,
+        js ? `  Total: ${js.total} | Applied: ${js.applied} | Initial Interview: ${js.initialInterview} | Final Interview: ${js.finalInterview}` : null,
         js ? `  Offers: ${js.offer} | Rejected: ${js.rejected} | Starred: ${js.starred}` : null,
         "",
-        sm ? `Scraping: ${sm.totalJobsScraped} jobs scraped from ${sm.totalWebsites} websites` : null,
+        sm ? `Scraping: ${sm.totalJobsScraped} jobs scraped` : null,
         ds ? `Documents: ${ds.totalCvs} CVs, ${ds.totalCoverLetters} cover letters` : null,
-        stats.portfolioMetrics ? `Portfolio: ${stats.portfolioMetrics.visitsThisMonth} visits this month` : null,
+        stats.portfolioMetrics ? `Portfolio: ${stats.portfolioMetrics.visitCount} visits` : null,
       ].filter(Boolean).join("\n");
     },
   });

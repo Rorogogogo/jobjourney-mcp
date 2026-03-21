@@ -15,17 +15,15 @@ export function registerNotificationTools(server: FastMCP<SessionAuth>) {
       const apiKey = context.session?.apiKey;
       const limit = args.limit || 10;
       const data = (await apiCall(`/api/notification?page=1&pageSize=${limit}`, {}, apiKey)) as {
-        data?: {
-          items?: Array<{
-            id: string; title: string; message: string;
-            isRead: boolean; createdOnUtc: string; type?: string;
-          }>;
-          totalCount?: number;
-          unreadCount?: number;
-        };
+        items?: Array<{
+          id: string; message: string;
+          isRead: boolean; createdOnUtc: string; type?: string;
+        }>;
+        totalCount?: number;
+        unreadCount?: number;
       };
 
-      const notifications = data.data?.items || [];
+      const notifications = data.items || [];
       if (notifications.length === 0) {
         return "No notifications.";
       }
@@ -33,12 +31,12 @@ export function registerNotificationTools(server: FastMCP<SessionAuth>) {
       const list = notifications
         .map((n, i) => {
           const read = n.isRead ? "  " : "[!]";
-          return `${read} ${i + 1}. ${n.title}\n   ${n.message}\n   ${new Date(n.createdOnUtc).toLocaleString()}`;
+          return `${read} ${i + 1}. ${n.message}\n   ${new Date(n.createdOnUtc).toLocaleString()}\n   ID: ${n.id}`;
         })
         .join("\n\n");
 
-      const unread = data.data?.unreadCount;
-      return `Notifications${unread ? ` (${unread} unread)` : ""}:\n\n${list}`;
+      const unread = data.unreadCount;
+      return `Notifications${unread !== undefined ? ` (${unread} unread)` : ""}:\n\n${list}`;
     },
   });
 
