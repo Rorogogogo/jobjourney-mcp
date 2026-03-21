@@ -24,6 +24,11 @@ export class LinkedInGuestSource {
             if (cards.length === 0) {
                 break;
             }
+            request.onProgress?.({
+                page: pageIndex + 1,
+                totalPages: request.pages,
+                jobsFound: jobs.length + cards.length,
+            });
             for (const card of cards) {
                 try {
                     const detailHtml = await this.httpClient.getText(LINKEDIN_JOB_DETAIL_URL.replace("{jobId}", card.jobId));
