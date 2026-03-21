@@ -331,6 +331,10 @@ export function registerLocalScrapingTools(
       keyword: z.string().describe("Job search keyword, e.g. 'full stack'"),
       location: z.string().describe("Job location, e.g. 'Sydney'"),
       time: z.string().describe("Daily time to run in HH:mm format, e.g. '09:00'"),
+      pages: z
+        .number()
+        .optional()
+        .describe("Number of pages to fetch per source (max 30, default 30). IMPORTANT: Always ask the user how many pages they want to scrape before calling this tool."),
       sources: z
         .array(z.string())
         .optional()
@@ -356,11 +360,13 @@ export function registerLocalScrapingTools(
       const db = openDatabaseImpl();
       try {
         const repo = new SchedulesRepo(db);
+        const pages = Math.min(args.pages ?? 30, 30);
         const schedule = repo.create({
           keyword: args.keyword,
           location: args.location,
           source: "discover",
           sources: sourceList,
+          pages,
           runMode: "discover",
           cron: cronExpr,
         });
@@ -370,6 +376,7 @@ export function registerLocalScrapingTools(
         return [
           `Scheduled "${args.keyword}" in ${args.location} every day at ${args.time}.`,
           `Sources: ${selectedSources.join(", ")}`,
+          `Pages: ${pages}`,
           `Schedule ID: ${schedule.id}`,
           `Cron: ${cronExpr}`,
           `The jobjourney-agent background process will execute this automatically.`,
