@@ -1,5 +1,6 @@
 import { AgentScheduler } from "./scheduler.js";
 import { writeHeartbeat } from "./heartbeat.js";
+import { createSignalRClient } from "./signalr-client.js";
 
 const RECONCILE_INTERVAL_MS = 30_000;
 const HEARTBEAT_INTERVAL_MS = 15_000;
@@ -8,6 +9,9 @@ async function main(): Promise<void> {
   console.log("[agent] starting jobjourney-agent");
 
   const homeDir = process.env.JOBJOURNEY_HOME;
+  const apiUrl = process.env.JOBJOURNEY_API_URL;
+  const apiKey = process.env.JOBJOURNEY_API_KEY;
+
   const scheduler = new AgentScheduler();
 
   // Initial reconciliation
@@ -32,10 +36,24 @@ async function main(): Promise<void> {
     }
   }, HEARTBEAT_INTERVAL_MS);
 
-  // Handle graceful shutdown
+  // SignalR connection to backend
+  let signalrConnection: Awaited<ReturnType<typeof createSignalRClient>> | null = null;
+  if (apiUrl && apiKey) {
+    try {
+      signalrConnection = await createSignalRClient({ apiUrl, apiKey });
+    } catch (error) {
+      console.error("[agent] Failed to connect SignalR:", error);
+      // Agent continues without SignalR — scraping still works
+    }
+  } else {
+    console.log("[agent] JOBJOURNEY_API_URL or JOBJOURNEY_API_KEY not set, skipping SignalR");
+  }
+
+  // Graceful shutdown
   const shutdown = () => {
     console.log("[agent] shutting down");
     scheduler.stop();
+    signalrConnection?.stop().catch(() => {});
     process.exit(0);
   };
 
