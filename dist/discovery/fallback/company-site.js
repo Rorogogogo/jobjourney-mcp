@@ -29,14 +29,22 @@ export class CompanyCareerDiscoverer {
     httpClient;
     careerPaths;
     maxProbes;
+    perCompanyTimeoutMs;
     constructor(httpClient, options = {}) {
         this.httpClient = httpClient;
         this.careerPaths = normalizeCareerPaths(options.careerPaths ?? DEFAULT_CAREER_PATHS);
         this.maxProbes = Math.max(1, options.maxProbes ?? 6);
+        this.perCompanyTimeoutMs = options.perCompanyTimeoutMs ?? 8000;
         this.logger = options.logger;
     }
     logger;
     async discover(input) {
+        return Promise.race([
+            this.discoverImpl(input),
+            new Promise((_, reject) => setTimeout(() => reject(new Error(`Career discovery timed out for ${input.companyName}`)), this.perCompanyTimeoutMs)),
+        ]);
+    }
+    async discoverImpl(input) {
         const domains = inferCompanyDomains(input.companyName, input.location ?? "", this.maxProbes);
         if (domains.length === 0) {
             const result = {

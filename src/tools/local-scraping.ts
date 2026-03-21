@@ -133,9 +133,9 @@ export function registerLocalScrapingTools(
       career_discovery: z
         .boolean()
         .optional()
-        .default(true)
+        .default(false)
         .describe(
-          "When LinkedIn hides external apply URLs, probe company career pages to find ATS links (Greenhouse, Lever, etc.). Enabled by default.",
+          "When LinkedIn hides external apply URLs, probe company career pages to find ATS links (Greenhouse, Lever, etc.). Disabled by default because it probes many URLs and can cause timeouts in MCP clients.",
         ),
     }),
     execute: async (args, context) => {
@@ -224,7 +224,7 @@ export function registerLocalScrapingTools(
               location: args.location,
               sources: selectedSources as any,
               pages: totalPages,
-              careerDiscovery: args.career_discovery ?? true,
+              careerDiscovery: args.career_discovery ?? false,
             },
             {
               logger: progressLogger,

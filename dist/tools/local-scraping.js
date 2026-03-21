@@ -19,8 +19,8 @@ export function registerLocalScrapingTools(server, deps = {}) {
     const hasCookiesImpl = deps.hasCookies ?? hasCookies;
     const checkPlaywrightReadyImpl = deps.checkPlaywrightReady ?? checkPlaywrightReady;
     const checkForUpdatesImpl = deps.checkForUpdates ?? checkForUpdates;
-    const discoveryLogger = (payload) => {
-        console.error(`[discover] ${JSON.stringify(payload)}`);
+    const discoveryLogger = (_payload) => {
+        // intentionally silent — console.error corrupts stdio MCP transport
     };
     server.addTool({
         name: "check_for_updates",
@@ -105,8 +105,8 @@ export function registerLocalScrapingTools(server, deps = {}) {
             career_discovery: z
                 .boolean()
                 .optional()
-                .default(true)
-                .describe("When LinkedIn hides external apply URLs, probe company career pages to find ATS links (Greenhouse, Lever, etc.). Enabled by default."),
+                .default(false)
+                .describe("When LinkedIn hides external apply URLs, probe company career pages to find ATS links (Greenhouse, Lever, etc.). Disabled by default because it probes many URLs and can cause timeouts in MCP clients."),
         }),
         execute: async (args, context) => {
             const db = openDatabaseImpl();
@@ -175,7 +175,7 @@ export function registerLocalScrapingTools(server, deps = {}) {
                         location: args.location,
                         sources: selectedSources,
                         pages: totalPages,
-                        careerDiscovery: args.career_discovery ?? true,
+                        careerDiscovery: args.career_discovery ?? false,
                     }, {
                         logger: progressLogger,
                     });

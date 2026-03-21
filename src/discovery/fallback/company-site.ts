@@ -62,12 +62,14 @@ interface HttpClientLike {
 interface CompanyCareerDiscovererOptions {
   careerPaths?: string[];
   maxProbes?: number;
+  perCompanyTimeoutMs?: number;
   logger?: CareerDiscoveryLogger;
 }
 
 export class CompanyCareerDiscoverer implements CompanyCareerDiscovererLike {
   readonly careerPaths: string[];
   readonly maxProbes: number;
+  readonly perCompanyTimeoutMs: number;
 
   constructor(
     private readonly httpClient: HttpClientLike,
@@ -77,12 +79,28 @@ export class CompanyCareerDiscoverer implements CompanyCareerDiscovererLike {
       options.careerPaths ?? DEFAULT_CAREER_PATHS,
     );
     this.maxProbes = Math.max(1, options.maxProbes ?? 6);
+    this.perCompanyTimeoutMs = options.perCompanyTimeoutMs ?? 8000;
     this.logger = options.logger;
   }
 
   private readonly logger?: CareerDiscoveryLogger;
 
   async discover(input: {
+    companyName: string;
+    location?: string;
+  }): Promise<CareerDiscoveryResult> {
+    return Promise.race([
+      this.discoverImpl(input),
+      new Promise<CareerDiscoveryResult>((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`Career discovery timed out for ${input.companyName}`)),
+          this.perCompanyTimeoutMs,
+        ),
+      ),
+    ]);
+  }
+
+  private async discoverImpl(input: {
     companyName: string;
     location?: string;
   }): Promise<CareerDiscoveryResult> {
