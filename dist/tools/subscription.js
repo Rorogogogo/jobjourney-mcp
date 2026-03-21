@@ -8,17 +8,7 @@ export function registerSubscriptionTools(server) {
         execute: async (_args, context) => {
             const apiKey = context.session?.apiKey;
             const data = (await apiCall("/api/subscription/status", {}, apiKey));
-            const sub = data.data;
-            if (!sub)
-                return "Could not retrieve subscription status.";
-            return [
-                "Subscription Status",
-                `Plan: ${sub.plan || "Free"}`,
-                `Status: ${sub.status || "Active"}`,
-                sub.currentPeriodEnd ? `Renews: ${new Date(sub.currentPeriodEnd).toLocaleDateString()}` : null,
-                sub.trialEnd ? `Trial ends: ${new Date(sub.trialEnd).toLocaleDateString()}` : null,
-                sub.features?.length ? `\nFeatures: ${sub.features.join(", ")}` : null,
-            ].filter(Boolean).join("\n");
+            return `Subscription Status: ${data.message || "Unknown"}`;
         },
     });
     server.addTool({
@@ -28,7 +18,7 @@ export function registerSubscriptionTools(server) {
         execute: async (_args, context) => {
             const apiKey = context.session?.apiKey;
             const data = (await apiCall("/api/subscription/plans", {}, apiKey));
-            const plans = data.data || [];
+            const plans = data.items || [];
             if (plans.length === 0)
                 return "No subscription plans available.";
             const list = plans.map((plan, i) => {
@@ -41,19 +31,17 @@ export function registerSubscriptionTools(server) {
     });
     server.addTool({
         name: "check_feature_access",
-        description: "Check if the user has access to a specific feature based on their subscription.",
+        description: "Check if the user has access to a specific AI feature based on their subscription.",
         parameters: z.object({
-            feature_name: z.string().describe("The feature name to check access for"),
+            feature_name: z.enum(["CvEvaluation", "CoverLetterGeneration", "JobsAnalysis", "ResumeGeneration", "MockInterview"])
+                .describe("The AI feature to check access for"),
         }),
         execute: async (args, context) => {
             const apiKey = context.session?.apiKey;
             const data = (await apiCall(`/api/subscription/check/${args.feature_name}`, {}, apiKey));
-            const access = data.data;
-            if (!access)
-                return "Could not check feature access.";
-            return access.hasAccess
+            return data.isSuccess
                 ? `You have access to "${args.feature_name}".`
-                : `You do not have access to "${args.feature_name}".${access.reason ? ` Reason: ${access.reason}` : ""}`;
+                : `You do not have access to "${args.feature_name}".${data.message ? ` Reason: ${data.message}` : ""}`;
         },
     });
     server.addTool({
@@ -63,12 +51,16 @@ export function registerSubscriptionTools(server) {
         execute: async (_args, context) => {
             const apiKey = context.session?.apiKey;
             const data = (await apiCall("/api/subscription/payments", {}, apiKey));
-            const payments = data.data || [];
+            if (data.errorCode) {
+                return `Unable to retrieve payment history: ${data.message || data.errorCode}`;
+            }
+            const payments = data.subscriptionHistory || [];
             if (payments.length === 0)
                 return "No payment history found.";
             const list = payments.map((p, i) => {
-                const amount = `$${(p.amount / 100).toFixed(2)} ${(p.currency || "USD").toUpperCase()}`;
-                return `${i + 1}. ${amount} - ${p.status}\n   ${new Date(p.createdOnUtc).toLocaleDateString()}${p.description ? `\n   ${p.description}` : ""}`;
+                const amount = `$${p.amount.toFixed(2)}`;
+                const date = p.transactionDateOnUtc ? new Date(p.transactionDateOnUtc).toLocaleDateString() : "Unknown date";
+                return `${i + 1}. ${amount} - ${p.status || "unknown"}\n   ${date}${p.description ? `\n   ${p.description}` : ""}`;
             }).join("\n\n");
             return `Payment History:\n\n${list}`;
         },

@@ -16,7 +16,7 @@ export function registerDocumentTools(server) {
             const results = [];
             if (docType === "all" || docType === "cvs") {
                 const cvData = (await apiCall("/api/document/cvs", {}, apiKey));
-                const cvs = cvData.data || [];
+                const cvs = cvData.items || [];
                 if (cvs.length > 0) {
                     results.push("CVs:");
                     cvs.forEach((cv, i) => {
@@ -29,7 +29,7 @@ export function registerDocumentTools(server) {
             }
             if (docType === "all" || docType === "cover-letters") {
                 const clData = (await apiCall("/api/document/cover-letters", {}, apiKey));
-                const cls = clData.data || [];
+                const cls = clData.items || [];
                 if (cls.length > 0) {
                     results.push("\nCover Letters:");
                     cls.forEach((cl, i) => {

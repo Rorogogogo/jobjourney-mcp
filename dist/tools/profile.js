@@ -7,17 +7,16 @@ export function registerProfileTools(server) {
         parameters: z.object({}),
         execute: async (_args, context) => {
             const apiKey = context.session?.apiKey;
-            const data = (await apiCall("/api/profile", {}, apiKey));
-            const p = data.data;
-            if (!p)
+            const p = (await apiCall("/api/profile", {}, apiKey));
+            if (!p || (!p.firstName && !p.email))
                 return "Could not retrieve profile.";
             const skills = p.skills?.map(s => s.name).join(", ") || "None listed";
-            const employment = p.employments?.map(e => `  - ${e.title} at ${e.companyName}${e.startDate ? ` (${e.startDate}${e.endDate ? ` - ${e.endDate}` : " - Present"})` : ""}`).join("\n") || "  None listed";
-            const education = p.educations?.map(e => `  - ${e.degree}${e.fieldOfStudy ? ` in ${e.fieldOfStudy}` : ""} - ${e.institution}`).join("\n") || "  None listed";
+            const employment = p.employmentHistory?.map(e => `  - ${e.title} at ${e.companyName}${e.startDate ? ` (${e.startDate}${e.endDate ? ` - ${e.endDate}` : " - Present"})` : ""}`).join("\n") || "  None listed";
+            const education = p.education?.map(e => `  - ${e.degree}${e.fieldOfStudy ? ` in ${e.fieldOfStudy}` : ""} - ${e.institution}`).join("\n") || "  None listed";
             const projects = p.projects?.map(pr => `  - ${pr.name}${pr.description ? `: ${pr.description.substring(0, 80)}` : ""}`).join("\n") || "  None listed";
             return [
                 `${p.firstName || ""} ${p.lastName || ""}`.trim(),
-                p.headline ? `${p.headline}` : null,
+                p.title ? `${p.title}` : null,
                 p.email ? `Email: ${p.email}` : null,
                 p.location ? `Location: ${p.location}` : null,
                 p.bio ? `\nBio: ${p.bio}` : null,
