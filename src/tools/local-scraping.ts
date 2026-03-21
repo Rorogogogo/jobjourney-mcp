@@ -37,8 +37,8 @@ export function registerLocalScrapingTools(
   const hasCookiesImpl = deps.hasCookies ?? hasCookies;
   const checkPlaywrightReadyImpl = deps.checkPlaywrightReady ?? checkPlaywrightReady;
   const checkForUpdatesImpl = deps.checkForUpdates ?? checkForUpdates;
-  const discoveryLogger = (payload: Record<string, unknown>) => {
-    console.error(`[discover] ${JSON.stringify(payload)}`);
+  const discoveryLogger = (_payload: Record<string, unknown>) => {
+    // intentionally silent — console.error corrupts stdio MCP transport
   };
 
   server.addTool({
