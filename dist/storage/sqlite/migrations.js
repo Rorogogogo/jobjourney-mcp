@@ -106,6 +106,7 @@ function ensureJobsColumns(db) {
     ensureTableColumns(db, "schedules", [
         ["run_mode", "TEXT NOT NULL DEFAULT 'scrape'"],
         ["sources", "TEXT"],
+        ["pages", "INTEGER DEFAULT 30"],
     ]);
     ensureTableColumns(db, "scrape_runs", [
         ["run_mode", "TEXT NOT NULL DEFAULT 'scrape'"],

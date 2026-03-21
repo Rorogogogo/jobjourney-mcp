@@ -5,6 +5,7 @@ export interface ScheduleInput {
     source: string;
     runMode?: "scrape" | "discover";
     sources?: string | null;
+    pages?: number;
     cron: string;
 }
 export interface CreatedSchedule extends ScheduleInput {
@@ -18,6 +19,7 @@ export interface ScheduleRow {
     source: string;
     run_mode: string;
     sources: string | null;
+    pages: number | null;
     cron: string;
     created_at: string;
     updated_at: string | null;

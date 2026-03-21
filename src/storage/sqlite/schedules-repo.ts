@@ -6,6 +6,7 @@ export interface ScheduleInput {
   source: string;
   runMode?: "scrape" | "discover";
   sources?: string | null;
+  pages?: number;
   cron: string;
 }
 
@@ -21,6 +22,7 @@ export interface ScheduleRow {
   source: string;
   run_mode: string;
   sources: string | null;
+  pages: number | null;
   cron: string;
   created_at: string;
   updated_at: string | null;
@@ -42,13 +44,14 @@ export class SchedulesRepo {
   create(schedule: ScheduleInput): CreatedSchedule {
     const result = this.db
       .prepare<ScheduleInput>(`
-        INSERT INTO schedules (keyword, location, source, run_mode, sources, cron, created_at, updated_at)
-        VALUES (@keyword, @location, @source, @runMode, @sources, @cron, datetime('now'), datetime('now'))
+        INSERT INTO schedules (keyword, location, source, run_mode, sources, pages, cron, created_at, updated_at)
+        VALUES (@keyword, @location, @source, @runMode, @sources, @pages, @cron, datetime('now'), datetime('now'))
       `)
         .run({
           ...schedule,
           runMode: schedule.runMode ?? "scrape",
           sources: schedule.sources ?? undefined,
+          pages: schedule.pages ?? 30,
         });
 
     const id = Number(result.lastInsertRowid);
@@ -77,7 +80,7 @@ export class SchedulesRepo {
     if (enabledOnly) {
       return this.db
         .prepare<unknown[], ScheduleRow>(`
-          SELECT id, keyword, location, source, run_mode, sources, cron, created_at, updated_at, last_run_at, enabled
+          SELECT id, keyword, location, source, run_mode, sources, pages, cron, created_at, updated_at, last_run_at, enabled
           FROM schedules
           WHERE enabled = 1
           ORDER BY created_at DESC
@@ -87,7 +90,7 @@ export class SchedulesRepo {
 
     return this.db
       .prepare<unknown[], ScheduleRow>(`
-        SELECT id, keyword, location, source, run_mode, sources, cron, created_at, updated_at, last_run_at, enabled
+        SELECT id, keyword, location, source, run_mode, sources, pages, cron, created_at, updated_at, last_run_at, enabled
         FROM schedules
         ORDER BY created_at DESC
       `)

@@ -112,6 +112,7 @@ describe("AgentScheduler", () => {
       location: "Sydney",
       sources: ["linkedin", "seek"],
       pages: 30,
+      careerDiscovery: true,
     }, {
       logger: expect.any(Function),
     });

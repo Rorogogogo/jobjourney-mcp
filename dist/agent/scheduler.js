@@ -33,7 +33,7 @@ export class AgentScheduler {
                 const s = schedule;
                 if (!this.tasks.has(s.id) && cron.validate(s.cron)) {
                     const task = cron.schedule(s.cron, () => {
-                        void this.runScheduledJob(s.id, s.keyword, s.location, s.source, s.run_mode, s.sources);
+                        void this.runScheduledJob(s.id, s.keyword, s.location, s.source, s.run_mode, s.sources, s.pages);
                     });
                     this.tasks.set(s.id, { scheduleId: s.id, task });
                 }
@@ -43,7 +43,7 @@ export class AgentScheduler {
             db.close();
         }
     }
-    async runScheduledJob(id, keyword, location, source, _runMode, sources) {
+    async runScheduledJob(id, keyword, location, source, _runMode, sources, pages) {
         const db = openDatabase(this.dbPath);
         const runsRepo = new ScrapeRunsRepo(db);
         const selectedSources = sources
@@ -62,7 +62,8 @@ export class AgentScheduler {
                 keyword,
                 location,
                 sources: selectedSources,
-                pages: 30,
+                pages: Math.min(pages ?? 30, 30),
+                careerDiscovery: true,
             }, {
                 logger: this.discoveryLogger,
             });
@@ -85,8 +86,8 @@ export class AgentScheduler {
             db.close();
         }
     }
-    async runScheduledJobForTest(id, keyword, location, source, runMode, sources) {
-        return this.runScheduledJob(id, keyword, location, source, runMode, sources);
+    async runScheduledJobForTest(id, keyword, location, source, runMode, sources, pages) {
+        return this.runScheduledJob(id, keyword, location, source, runMode, sources, pages);
     }
     stop() {
         for (const [, entry] of this.tasks) {

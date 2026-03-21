@@ -10,7 +10,7 @@ export declare class AgentScheduler {
     private readonly discoveryLogger;
     reconcile(): void;
     private runScheduledJob;
-    runScheduledJobForTest(id: number, keyword: string, location: string, source: string, runMode: string, sources: string | null): Promise<void>;
+    runScheduledJobForTest(id: number, keyword: string, location: string, source: string, runMode: string, sources: string | null, pages?: number | null): Promise<void>;
     stop(): void;
     get activeCount(): number;
 }
