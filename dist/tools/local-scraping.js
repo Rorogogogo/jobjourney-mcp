@@ -91,6 +91,7 @@ export function registerLocalScrapingTools(server, deps = {}) {
     server.addTool({
         name: "discover_jobs",
         description: "Discover jobs across enabled sources (LinkedIn, SEEK, etc.), enrich them with ATS detection, expand career pages, and store results locally in SQLite. Returns a structured JSON summary.",
+        annotations: { streamingHint: true },
         parameters: z.object({
             keyword: z.string().describe("Job search keyword, e.g. 'full stack'"),
             location: z.string().describe("Job location, e.g. 'Sydney'"),
@@ -123,44 +124,48 @@ export function registerLocalScrapingTools(server, deps = {}) {
                 });
                 let jobsSoFar = 0;
                 const totalPages = Math.min(args.pages ?? 30, 30);
-                const log = context?.log?.info?.bind(context.log);
+                const stream = context?.streamContent?.bind(context);
                 const report = context?.reportProgress?.bind(context);
+                const sendProgress = (message) => {
+                    if (stream) {
+                        void stream({ type: "text", text: message + "\n" });
+                    }
+                    context?.log?.info?.(message);
+                };
                 const progressLogger = (payload) => {
                     discoveryLogger(payload);
-                    if (!log)
-                        return;
                     const event = payload.event;
                     switch (event) {
                         case "discovery_source_start":
-                            log(`Starting ${payload.source} discovery: "${payload.keyword}" in ${payload.location} (${payload.pages} pages)`);
+                            sendProgress(`🔍 Starting ${payload.source} discovery: "${payload.keyword}" in ${payload.location} (${payload.pages} pages)`);
                             void report?.({ progress: 0, total: totalPages });
                             break;
                         case "discovery_source_page":
-                            log(`${payload.source}: page ${payload.page}/${payload.totalPages} — ${payload.jobsFound} jobs found so far`);
+                            sendProgress(`📄 ${payload.source}: page ${payload.page}/${payload.totalPages} — ${payload.jobsFound} jobs found so far`);
                             void report?.({ progress: payload.page, total: totalPages });
                             break;
                         case "discovery_source_success":
                             jobsSoFar += payload.discoveredJobs || 0;
-                            log(`${payload.source}: found ${payload.discoveredJobs} jobs from search pages`);
+                            sendProgress(`✅ ${payload.source}: found ${payload.discoveredJobs} jobs from search pages`);
                             void report?.({ progress: totalPages, total: totalPages });
                             break;
                         case "discovery_ats_expand_start":
-                            log(`Expanding ${payload.atsType} jobs for ${payload.companyIdentifier}...`);
+                            sendProgress(`🏢 Expanding ${payload.atsType} jobs for ${payload.companyIdentifier}...`);
                             break;
                         case "discovery_ats_expand_success":
                             jobsSoFar += payload.discoveredJobs || 0;
-                            log(`${payload.atsType}/${payload.companyIdentifier}: added ${payload.discoveredJobs} jobs (total so far: ${jobsSoFar})`);
+                            sendProgress(`✅ ${payload.atsType}/${payload.companyIdentifier}: added ${payload.discoveredJobs} jobs (total so far: ${jobsSoFar})`);
                             break;
                         case "career_discovery_probe":
-                            log(`Probing career page: ${payload.probeUrl}`);
+                            sendProgress(`🌐 Probing career page: ${payload.probeUrl}`);
                             break;
                         case "career_discovery_result":
                             if (payload.outcome === "ats_detected") {
-                                log(`Found ${payload.atsType} ATS for ${payload.company} via career page`);
+                                sendProgress(`🎯 Found ${payload.atsType} ATS for ${payload.company} via career page`);
                             }
                             break;
                         case "discovery_source_error":
-                            log(`${payload.source} failed: ${payload.error}`);
+                            sendProgress(`❌ ${payload.source} failed: ${payload.error}`);
                             break;
                     }
                 };
