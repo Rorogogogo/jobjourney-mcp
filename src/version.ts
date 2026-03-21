@@ -1,2 +1,2 @@
 export const PLUGIN_NAME = "jobjourney-claude-plugin";
-export const PLUGIN_VERSION = "3.1.26";
+export const PLUGIN_VERSION = "3.1.27";
