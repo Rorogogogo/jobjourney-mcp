@@ -11,25 +11,22 @@ export function registerProfileTools(server: FastMCP<SessionAuth>) {
     parameters: z.object({}),
     execute: async (_args, context) => {
       const apiKey = context.session?.apiKey;
-      const data = (await apiCall("/api/profile", {}, apiKey)) as {
-        data?: {
-          firstName?: string; lastName?: string; email?: string;
-          headline?: string; bio?: string; location?: string;
-          skills?: Array<{ name: string }>;
-          employments?: Array<{ companyName: string; title: string; startDate?: string; endDate?: string }>;
-          educations?: Array<{ institution: string; degree: string; fieldOfStudy?: string }>;
-          projects?: Array<{ name: string; description?: string }>;
-        };
+      const p = (await apiCall("/api/profile", {}, apiKey)) as {
+        firstName?: string; lastName?: string; email?: string;
+        title?: string; headline?: string; bio?: string; location?: string;
+        skills?: Array<{ name: string }>;
+        employmentHistory?: Array<{ companyName: string; title: string; startDate?: string; endDate?: string }>;
+        education?: Array<{ institution: string; degree: string; fieldOfStudy?: string }>;
+        projects?: Array<{ name: string; description?: string }>;
       };
 
-      const p = data.data;
-      if (!p) return "Could not retrieve profile.";
+      if (!p || (!p.firstName && !p.email)) return "Could not retrieve profile.";
 
       const skills = p.skills?.map(s => s.name).join(", ") || "None listed";
-      const employment = p.employments?.map(e =>
+      const employment = p.employmentHistory?.map(e =>
         `  - ${e.title} at ${e.companyName}${e.startDate ? ` (${e.startDate}${e.endDate ? ` - ${e.endDate}` : " - Present"})` : ""}`
       ).join("\n") || "  None listed";
-      const education = p.educations?.map(e =>
+      const education = p.education?.map(e =>
         `  - ${e.degree}${e.fieldOfStudy ? ` in ${e.fieldOfStudy}` : ""} - ${e.institution}`
       ).join("\n") || "  None listed";
       const projects = p.projects?.map(pr =>
@@ -38,7 +35,7 @@ export function registerProfileTools(server: FastMCP<SessionAuth>) {
 
       return [
         `${p.firstName || ""} ${p.lastName || ""}`.trim(),
-        p.headline ? `${p.headline}` : null,
+        p.title ? `${p.title}` : null,
         p.email ? `Email: ${p.email}` : null,
         p.location ? `Location: ${p.location}` : null,
         p.bio ? `\nBio: ${p.bio}` : null,

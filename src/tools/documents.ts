@@ -20,9 +20,9 @@ export function registerDocumentTools(server: FastMCP<SessionAuth>) {
 
       if (docType === "all" || docType === "cvs") {
         const cvData = (await apiCall("/api/document/cvs", {}, apiKey)) as {
-          data?: Array<{ id: string; name: string; createdOnUtc: string }>;
+          items?: Array<{ id: string; name: string; createdOnUtc: string }>;
         };
-        const cvs = cvData.data || [];
+        const cvs = cvData.items || [];
         if (cvs.length > 0) {
           results.push("CVs:");
           cvs.forEach((cv, i) => {
@@ -35,9 +35,9 @@ export function registerDocumentTools(server: FastMCP<SessionAuth>) {
 
       if (docType === "all" || docType === "cover-letters") {
         const clData = (await apiCall("/api/document/cover-letters", {}, apiKey)) as {
-          data?: Array<{ id: string; name: string; createdOnUtc: string }>;
+          items?: Array<{ id: string; name: string; createdOnUtc: string }>;
         };
-        const cls = clData.data || [];
+        const cls = clData.items || [];
         if (cls.length > 0) {
           results.push("\nCover Letters:");
           cls.forEach((cl, i) => {
