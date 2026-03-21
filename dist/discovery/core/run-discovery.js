@@ -148,8 +148,14 @@ export async function runDiscovery(options, dependencies = {}) {
         if (result.success) {
             successfulSources.push(result.sourceName);
             expandedCompanies.push(...result.expandedCompanies);
+            const batchJobs = [];
             for (const job of result.jobs) {
-                pushJob(jobs, seenJobs, job);
+                if (pushJob(jobs, seenJobs, job)) {
+                    batchJobs.push(job);
+                }
+            }
+            if (batchJobs.length > 0) {
+                dependencies.onJobsBatch?.(batchJobs, result.sourceName);
             }
         }
         else {
@@ -215,10 +221,11 @@ function applyAtsDetection(job) {
 function pushJob(jobs, seenJobs, job) {
     const key = `${job.source}:${job.id || job.jobUrl || job.externalUrl}`;
     if (seenJobs.has(key)) {
-        return;
+        return false;
     }
     seenJobs.add(key);
     jobs.push(job);
+    return true;
 }
 function isSupportedAts(atsType) {
     return atsType === "greenhouse" || atsType === "lever";

@@ -218,6 +218,8 @@ export function registerLocalScrapingTools(
         };
 
         try {
+          const repo = new DiscoveryJobsRepo(db);
+          let persistedCount = 0;
           const result = await runDiscoveryImpl(
             {
               keyword: args.keyword,
@@ -228,14 +230,28 @@ export function registerLocalScrapingTools(
             },
             {
               logger: progressLogger,
+              onJobsBatch: (batchJobs) => {
+                repo.upsertJobs(batchJobs, {
+                  keyword: args.keyword,
+                  location: args.location,
+                  runId: run.id,
+                });
+                persistedCount += batchJobs.length;
+                sendProgress(
+                  `💾 Saved ${persistedCount} jobs to database so far`,
+                );
+              },
             },
           );
-          const repo = new DiscoveryJobsRepo(db);
-          repo.upsertJobs(result.jobs, {
-            keyword: args.keyword,
-            location: args.location,
-            runId: run.id,
-          });
+          // Persist any jobs not already saved by onJobsBatch (e.g. if caller
+          // doesn't support the callback, or deduplication left stragglers).
+          if (result.jobs.length > persistedCount) {
+            repo.upsertJobs(result.jobs, {
+              keyword: args.keyword,
+              location: args.location,
+              runId: run.id,
+            });
+          }
           runsRepo.finishRun(run.id, {
             status: "success",
             jobCount: result.jobs.length,
