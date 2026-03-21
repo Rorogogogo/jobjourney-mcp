@@ -27,18 +27,21 @@ interface HttpClientLike {
 interface CompanyCareerDiscovererOptions {
     careerPaths?: string[];
     maxProbes?: number;
+    perCompanyTimeoutMs?: number;
     logger?: CareerDiscoveryLogger;
 }
 export declare class CompanyCareerDiscoverer implements CompanyCareerDiscovererLike {
     private readonly httpClient;
     readonly careerPaths: string[];
     readonly maxProbes: number;
+    readonly perCompanyTimeoutMs: number;
     constructor(httpClient: HttpClientLike, options?: CompanyCareerDiscovererOptions);
     private readonly logger?;
     discover(input: {
         companyName: string;
         location?: string;
     }): Promise<CareerDiscoveryResult>;
+    private discoverImpl;
     private log;
 }
 export declare function inferCompanyDomains(companyName: string, location?: string, maxCandidates?: number): string[];
