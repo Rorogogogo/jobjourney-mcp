@@ -75,15 +75,102 @@ export class JoraScraper implements JobSourceScraper {
   }
 }
 
-async function dismissPopups(page: Page): Promise<void> {
+export async function dismissPopups(page: Page): Promise<void> {
   try {
     await page.evaluate(() => {
+      const scrollLockValues = new Set(["hidden", "clip"]);
+      const closeTextPatterns = [
+        /^close$/i,
+        /^dismiss$/i,
+        /^no thanks$/i,
+        /^not now$/i,
+        /^skip$/i,
+        /^maybe later$/i,
+        /^later$/i,
+        /^continue$/i,
+        /^continue without/i,
+      ];
+      const dialogSelectors = [
+        '[role="dialog"]',
+        '[aria-modal="true"]',
+        '[data-testid*="modal"]',
+        '[data-testid*="dialog"]',
+        '[class*="modal"]',
+        '[class*="dialog"]',
+        '[class*="popup"]',
+      ];
+      const dismissSelectors = [
+        '[aria-label*="close" i]',
+        '[aria-label*="dismiss" i]',
+        '[title*="close" i]',
+        '[title*="dismiss" i]',
+        '[data-testid*="close" i]',
+        '[data-testid*="dismiss" i]',
+        "button",
+        '[role="button"]',
+      ];
+      const textContent = (node: Element | null | undefined): string =>
+        node?.textContent?.replace(/\s+/g, " ").trim() ?? "";
+      const unlockScroll = (element: HTMLElement) => {
+        const computed = window.getComputedStyle(element);
+        if (scrollLockValues.has(computed.overflow)) {
+          element.style.setProperty("overflow", "auto", "important");
+        }
+        if (scrollLockValues.has(computed.overflowY)) {
+          element.style.setProperty("overflow-y", "auto", "important");
+        }
+      };
+      const isVisible = (node: Element | null | undefined): node is HTMLElement => {
+        if (!(node instanceof HTMLElement)) return false;
+        const rect = node.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return false;
+        const style = window.getComputedStyle(node);
+        return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
+      };
+
       // Remove email alert nudge cards that sit between job cards
       document.querySelectorAll(".email-alert-nudge-card").forEach((el) => el.remove());
       // Remove any cookie consent banners
       document.querySelectorAll('[class*="cookie-consent"], [class*="cookie-banner"], [id*="cookie"]').forEach((el) => el.remove());
       // Remove any generic modal overlays
-      document.querySelectorAll('[class*="modal-overlay"], [class*="modal-backdrop"]').forEach((el) => el.remove());
+      document.querySelectorAll('[class*="modal-overlay"], [class*="modal-backdrop"], [class*="overlay-backdrop"]').forEach((el) => el.remove());
+
+      const dialogCandidates = Array.from(document.querySelectorAll(dialogSelectors.join(",")))
+        .filter(isVisible)
+        .filter((el) => el.id !== "__jj-scrape-overlay");
+
+      for (const candidate of dialogCandidates) {
+        let dismissed = false;
+
+        for (const selector of dismissSelectors) {
+          for (const control of Array.from(candidate.querySelectorAll(selector))) {
+            if (!(control instanceof HTMLElement) || !isVisible(control)) continue;
+
+            const label = [
+              textContent(control),
+              control.getAttribute("aria-label")?.trim() ?? "",
+              control.getAttribute("title")?.trim() ?? "",
+            ].find(Boolean) ?? "";
+
+            if (!label || !closeTextPatterns.some((pattern) => pattern.test(label))) {
+              continue;
+            }
+
+            control.click();
+            dismissed = true;
+            break;
+          }
+
+          if (dismissed) break;
+        }
+
+        if (candidate.isConnected) {
+          candidate.remove();
+        }
+      }
+
+      unlockScroll(document.documentElement);
+      unlockScroll(document.body);
     });
   } catch {
     // Page might have navigated — ignore
@@ -124,6 +211,7 @@ async function scrapePageCards(
     if (controller.stopped) break;
     if (Date.now() - scrapeStart > TOTAL_SCRAPE_TIMEOUT_MS) break;
 
+    await dismissPopups(page);
     await updateOverlayProgress(page, {
       source: "Jora",
       currentJob: i + 1,
@@ -152,6 +240,7 @@ async function processCard(
   page: Page,
   card: ReturnType<Page["locator"]>,
 ): Promise<ScrapedJob | null> {
+  await dismissPopups(page);
   const basicInfo = await extractBasicInfoFromCard(card);
   if (!basicInfo.title || !basicInfo.url) return null;
 
@@ -159,6 +248,7 @@ async function processCard(
   const clickTarget = card.locator("a.job-link.-desktop-only").first();
   await clickTarget.click().catch(() => card.click());
   await sleep(DETAIL_PANEL_WAIT_MS);
+  await dismissPopups(page);
 
   // Try to extract detail from side panel
   const details = await extractDetailPanel(page);
