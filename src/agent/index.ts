@@ -1,6 +1,7 @@
 import { AgentScheduler } from "./scheduler.js";
 import { writeHeartbeat } from "./heartbeat.js";
 import { createSignalRClient } from "./signalr-client.js";
+import { startSignalRSupervisor } from "./signalr-supervisor.js";
 
 const RECONCILE_INTERVAL_MS = 30_000;
 const HEARTBEAT_INTERVAL_MS = 15_000;
@@ -37,14 +38,16 @@ async function main(): Promise<void> {
   }, HEARTBEAT_INTERVAL_MS);
 
   // SignalR connection to backend
-  let signalrConnection: Awaited<ReturnType<typeof createSignalRClient>> | null = null;
+  let signalrSupervisor: ReturnType<typeof startSignalRSupervisor> | null = null;
   if (apiUrl && apiKey) {
-    try {
-      signalrConnection = await createSignalRClient({ apiUrl, apiKey });
-    } catch (error) {
-      console.error("[agent] Failed to connect SignalR:", error);
-      // Agent continues without SignalR — scraping still works
-    }
+    signalrSupervisor = startSignalRSupervisor(
+      () => createSignalRClient({ apiUrl, apiKey }),
+      {
+        logError: (error) => {
+          console.error("[agent] Failed to connect SignalR:", error);
+        },
+      },
+    );
   } else {
     console.log("[agent] JOBJOURNEY_API_URL or JOBJOURNEY_API_KEY not set, skipping SignalR");
   }
@@ -53,7 +56,7 @@ async function main(): Promise<void> {
   const shutdown = () => {
     console.log("[agent] shutting down");
     scheduler.stop();
-    signalrConnection?.stop().catch(() => {});
+    void signalrSupervisor?.stop().catch(() => {});
     process.exit(0);
   };
 
