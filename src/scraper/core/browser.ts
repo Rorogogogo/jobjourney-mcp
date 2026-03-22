@@ -25,6 +25,13 @@ function getChromeExecutable(): string | undefined {
 export async function launchBrowser(): Promise<Browser> {
   return chromium.launch({
     headless: false,
+    args: [
+      "--no-focus-on-navigate",
+      "--no-startup-window",
+      "--disable-background-timer-throttling",
+      "--disable-renderer-backgrounding",
+      "--disable-backgrounding-occluded-windows",
+    ],
     ...(getChromeExecutable() ? { executablePath: getChromeExecutable() } : {}),
   });
 }
