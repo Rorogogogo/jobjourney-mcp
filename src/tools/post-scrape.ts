@@ -66,7 +66,7 @@ export async function onScrapeComplete(result: ScrapeResult): Promise<void> {
     }
 
     // 3. Open browser (detached so it survives regardless of parent state)
-    const clientUrl = "https://client.robert-personal-website.com";
+    const clientUrl = "https://www.jobjourney.me";
     const params = new URLSearchParams({
       runId: String(result.runId),
       source: "local",
