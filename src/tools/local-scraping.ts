@@ -141,6 +141,8 @@ export function registerLocalScrapingTools(
     execute: async (args, context) => {
       const db = openDatabaseImpl();
       try {
+        ensureAgentRunningImpl();
+
         const selectedSources = args.sources?.length
           ? args.sources
           : getActiveDiscoverySourceNamesImpl();

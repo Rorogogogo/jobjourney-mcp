@@ -99,6 +99,41 @@ describe("registerLocalScrapingTools", () => {
     db.close();
   });
 
+  it("starts the background agent before returning one-off discovery results", async () => {
+    const tools = new Map<string, any>();
+    const server = {
+      addTool(definition: any) {
+        tools.set(definition.name, definition);
+      },
+    };
+    const home = createTmpHome();
+    const dbPath = path.join(home, ".jobjourney", "jobs.db");
+    const ensureAgentRunning = vi.fn(() => true);
+
+    registerLocalScrapingTools(server as any, {
+      openDatabase: () => openDatabase(dbPath),
+      ensureAgentRunning,
+      runDiscovery: vi.fn(async () => ({
+        jobs: [],
+        sources: ["linkedin"],
+        failedSources: [],
+        expandedCompanies: [],
+      })),
+    });
+
+    const tool = tools.get("discover_jobs");
+    expect(tool).toBeTruthy();
+
+    await tool.execute({
+      keyword: "full stack",
+      location: "Sydney",
+      sources: ["linkedin"],
+      pages: 1,
+    });
+
+    expect(ensureAgentRunning).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps discovery progress logs off stdout for MCP stdio safety", async () => {
     const tools = new Map<string, any>();
     const server = {
