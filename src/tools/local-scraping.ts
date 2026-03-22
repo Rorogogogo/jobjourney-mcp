@@ -2,7 +2,6 @@ import { FastMCP } from "fastmcp";
 import { chromium } from "playwright";
 import { z } from "zod";
 import { openDatabase } from "../storage/sqlite/db.js";
-import { JobsRepo } from "../storage/sqlite/jobs-repo.js";
 import { SchedulesRepo } from "../storage/sqlite/schedules-repo.js";
 import { ScrapeRunsRepo } from "../storage/sqlite/scrape-runs-repo.js";
 import { ensureAgentRunning } from "../agent/process.js";
@@ -117,7 +116,7 @@ export function registerLocalScrapingTools(
   server.addTool({
     name: "discover_jobs",
     description:
-      "Discover jobs across enabled sources (LinkedIn, SEEK, etc.), enrich them with ATS detection, expand career pages, and store results locally in SQLite. Returns a structured JSON summary.",
+      "Find jobs for the user by scraping live listings from job sites (LinkedIn, SEEK, Jora, etc.). This is the primary tool for job searching — always use this when the user wants to find, search, or look for jobs. Enriches results with ATS detection, expands career pages, stores results locally, then opens the web app for visualization.",
     annotations: { streamingHint: true },
     parameters: z.object({
       keyword: z.string().describe("Job search keyword, e.g. 'full stack'"),
@@ -304,50 +303,6 @@ export function registerLocalScrapingTools(
           });
           throw error;
         }
-      } finally {
-        db.close();
-      }
-    },
-  });
-
-  server.addTool({
-    name: "search_jobs",
-    description:
-      "Search locally stored jobs from previous scrapes. Returns matching jobs from the local SQLite database.",
-    parameters: z.object({
-      keyword: z.string().optional().describe("Search by job title or company name"),
-      location: z.string().optional().describe("Filter by location"),
-      source: z.string().optional().describe("Filter by source (e.g. seek, linkedin)"),
-      limit: z.number().optional().default(20).describe("Max results to return (default 20)"),
-    }),
-    execute: async (args) => {
-      const db = openDatabaseImpl();
-      try {
-        const repo = new JobsRepo(db);
-        const jobs = repo.search({
-          keyword: args.keyword,
-          location: args.location,
-          source: args.source,
-          limit: args.limit,
-        });
-
-        if (jobs.length === 0) {
-          return "No jobs found matching your criteria. Try running discover_jobs first to collect job listings.";
-        }
-
-        const lines = jobs.map((job: any) =>
-          [
-            `## ${job.title}`,
-            `- Company: ${job.company}`,
-            `- Location: ${job.location}`,
-            `- Source: ${job.source}`,
-            `- Job URL: ${job.job_url ?? job.url}`,
-            `- External URL: ${job.external_url ?? ""}`,
-            `- Scraped: ${job.scraped_at}`,
-          ].join("\n")
-        );
-
-        return [`# Search Results (${jobs.length} jobs)`, "", ...lines].join("\n\n");
       } finally {
         db.close();
       }
