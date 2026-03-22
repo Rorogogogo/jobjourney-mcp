@@ -67,7 +67,7 @@ export async function createSignalRClient(options: SignalRClientOptions): Promis
       };
 
       try {
-        const result = await runAutoApplyPipeline(request, sendProgress);
+        const result = await runAutoApplyPipeline({ ...request, apiKey: options.apiKey }, sendProgress);
         await connection.invoke("AutoApplyComplete", request.requestId, result);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
