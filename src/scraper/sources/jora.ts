@@ -50,6 +50,7 @@ export class JoraScraper implements JobSourceScraper {
           await sleep(PAGE_NAV_DELAY_MS);
         }
 
+        await dismissPopups(page);
         await injectScrapingOverlay(page, controller);
 
         const pageJobs = await scrapePageCards(page, scrapeStart, controller, pageNum, maxPages, allJobs.length);
@@ -71,6 +72,21 @@ export class JoraScraper implements JobSourceScraper {
         await browser.close().catch(() => {});
       }
     }
+  }
+}
+
+async function dismissPopups(page: Page): Promise<void> {
+  try {
+    await page.evaluate(() => {
+      // Remove email alert nudge cards that sit between job cards
+      document.querySelectorAll(".email-alert-nudge-card").forEach((el) => el.remove());
+      // Remove any cookie consent banners
+      document.querySelectorAll('[class*="cookie-consent"], [class*="cookie-banner"], [id*="cookie"]').forEach((el) => el.remove());
+      // Remove any generic modal overlays
+      document.querySelectorAll('[class*="modal-overlay"], [class*="modal-backdrop"]').forEach((el) => el.remove());
+    });
+  } catch {
+    // Page might have navigated — ignore
   }
 }
 
