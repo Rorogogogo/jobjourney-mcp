@@ -23,7 +23,7 @@ const transport = (process.env.TRANSPORT || "stdio") as "httpStream" | "stdio";
 
 const server = new FastMCP<SessionAuth>({
   name: PLUGIN_NAME,
-  version: PLUGIN_VERSION,
+  version: PLUGIN_VERSION as `${number}.${number}.${number}`,
   authenticate: async (request): Promise<SessionAuth> => {
     // stdio transport: request is undefined, read API key from env
     if (!request) {
