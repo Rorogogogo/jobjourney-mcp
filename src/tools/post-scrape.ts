@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import { apiCall } from "../api.js";
 
 export interface ScrapeResult {
@@ -10,49 +10,86 @@ export interface ScrapeResult {
   jobs: Array<{ title: string; company: string; location: string }>;
 }
 
+interface ExchangeApiKeyResponse {
+  token: string;
+  user: unknown;
+  roles: string[];
+  isSuccess: boolean;
+}
+
 export async function onScrapeComplete(result: ScrapeResult): Promise<void> {
-  const apiKey = process.env.JOBJOURNEY_API_KEY;
+  try {
+    const apiKey = process.env.JOBJOURNEY_API_KEY;
 
-  // 1. Notify backend (apiCall reads JOBJOURNEY_API_URL from env automatically)
-  if (apiKey) {
-    try {
-      await apiCall(
-        "/scrape-run/complete",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            runId: String(result.runId),
-            keyword: result.keyword,
-            location: result.location,
-            sources: result.sources,
-            totalJobs: result.totalJobs,
-            topJobs: result.jobs.slice(0, 5).map((j) => ({
-              title: j.title,
-              company: j.company,
-              location: j.location,
-            })),
-          }),
-        },
-        apiKey,
-      );
-    } catch (error) {
-      console.error("[post-scrape] Backend notification failed:", error);
+    // 1. Notify backend
+    if (apiKey) {
+      try {
+        await apiCall(
+          "/api/scrape-run/complete",
+          {
+            method: "POST",
+            body: JSON.stringify({
+              runId: String(result.runId),
+              keyword: result.keyword,
+              location: result.location,
+              sources: result.sources,
+              totalJobs: result.totalJobs,
+              topJobs: result.jobs.slice(0, 5).map((j) => ({
+                title: j.title,
+                company: j.company,
+                location: j.location,
+              })),
+            }),
+          },
+          apiKey,
+        );
+      } catch {
+        // silently ignore — console.error corrupts stdio MCP transport
+      }
     }
+
+    // 2. Exchange API key for JWT so the browser auto-logs in
+    let authToken: string | null = null;
+    if (apiKey) {
+      try {
+        const data = (await apiCall(
+          "/api/auth/exchange-api-key",
+          { method: "POST" },
+          apiKey,
+        )) as ExchangeApiKeyResponse;
+        if (data.token) {
+          authToken = data.token;
+        }
+      } catch {
+        // graceful fallback — open browser without auto-login
+      }
+    }
+
+    // 3. Open browser (detached so it survives regardless of parent state)
+    const clientUrl = "https://client.robert-personal-website.com";
+    const params = new URLSearchParams({
+      runId: String(result.runId),
+      source: "local",
+    });
+    if (authToken) {
+      params.set("token", authToken);
+    }
+    const url = `${clientUrl}/job-market?${params.toString()}`;
+
+    const cmd =
+      process.platform === "darwin"
+        ? "open"
+        : process.platform === "win32"
+          ? "cmd"
+          : "xdg-open";
+    const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
+
+    const child = spawn(cmd, args, {
+      detached: true,
+      stdio: "ignore",
+    });
+    child.unref();
+  } catch {
+    // never let post-scrape errors propagate — they would become unhandled rejections
   }
-
-  // 2. Open browser
-  const clientUrl = "https://client.robert-personal-website.com";
-  const url = `${clientUrl}/job-market?runId=${result.runId}&source=local`;
-
-  const cmd =
-    process.platform === "darwin"
-      ? "open"
-      : process.platform === "win32"
-        ? "cmd"
-        : "xdg-open";
-  const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
-
-  execFile(cmd, args, () => {
-    // silently ignore errors
-  });
 }

@@ -10,6 +10,7 @@ export interface ScrapedJob {
   company: string;
   location: string;
   url: string;
+  externalUrl?: string;
   source: string;
   description?: string;
   salary?: string;
