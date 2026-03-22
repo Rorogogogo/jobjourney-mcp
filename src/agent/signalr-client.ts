@@ -1,5 +1,6 @@
 import * as signalR from "@microsoft/signalr";
 import { openDatabase } from "../storage/sqlite/db.js";
+import { runAutoApplyPipeline } from "../auto-apply/pipeline.js";
 
 export interface SignalRClientOptions {
   apiUrl: string;
@@ -51,6 +52,31 @@ export async function createSignalRClient(options: SignalRClientOptions): Promis
       db.close();
     }
   });
+
+  connection.on(
+    "TriggerAutoApply",
+    async (request: { requestId: string; jobUrl: string }) => {
+      console.log("[agent] TriggerAutoApply:", request.requestId, request.jobUrl);
+
+      const sendProgress = async (message: string) => {
+        try {
+          await connection.invoke("AutoApplyProgress", request.requestId, { message });
+        } catch (err) {
+          console.error("[agent] AutoApplyProgress send error:", err);
+        }
+      };
+
+      try {
+        const result = await runAutoApplyPipeline(request, sendProgress);
+        await connection.invoke("AutoApplyComplete", request.requestId, result);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await connection
+          .invoke("AutoApplyComplete", request.requestId, { success: false, error: message })
+          .catch(() => {});
+      }
+    },
+  );
 
   connection.onreconnected(() => {
     console.log("[agent] SignalR reconnected");
