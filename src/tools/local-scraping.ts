@@ -216,6 +216,13 @@ export function registerLocalScrapingTools(
                 `❌ ${payload.source} failed: ${payload.error}`,
               );
               break;
+            case "discovery_run_complete":
+              if ((payload.crossPlatformDuplicatesRemoved as number) > 0) {
+                sendProgress(
+                  `🔄 Removed ${payload.crossPlatformDuplicatesRemoved} cross-platform duplicates`,
+                );
+              }
+              break;
           }
         };
 
