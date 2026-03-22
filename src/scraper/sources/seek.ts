@@ -1,5 +1,14 @@
 import type { Page } from "playwright";
-import { launchBrowser, createAuthenticatedContext, saveCookies } from "../core/browser.js";
+import {
+  launchBrowser,
+  createAuthenticatedContext,
+  saveCookies,
+  createStopController,
+  injectScrapingOverlay,
+  updateOverlayProgress,
+  isBrowserClosedError,
+  type StopController,
+} from "../core/browser.js";
 import type {
   ScrapeRequest,
   ScrapedJob,
@@ -27,6 +36,7 @@ function sleep(ms: number): Promise<void> {
 export class SeekScraper implements JobSourceScraper {
   async scrape(request: ScrapeRequest): Promise<ScrapedJob[]> {
     const browser = await launchBrowser();
+    const controller = createStopController(browser);
     const context = await createAuthenticatedContext(browser, "seek");
     const scrapeStart = Date.now();
     try {
@@ -35,17 +45,20 @@ export class SeekScraper implements JobSourceScraper {
       const allJobs: ScrapedJob[] = [];
 
       for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+        if (controller.stopped) break;
         if (Date.now() - scrapeStart > TOTAL_SCRAPE_TIMEOUT_MS) break;
 
         const url = buildSeekUrl(request.keyword, request.location, pageNum);
         let pageJobs: ScrapedJob[] = [];
 
         for (let retry = 0; retry <= PAGE_MAX_RETRIES; retry++) {
+          if (controller.stopped) break;
           if (Date.now() - scrapeStart > TOTAL_SCRAPE_TIMEOUT_MS) break;
 
           await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
           if (pageNum > 1 || retry > 0) await sleep(PAGE_NAV_DELAY_MS);
           await scrollToBottom(page);
+          await injectScrapingOverlay(page, controller);
 
           const blocked = await isPageBlocked(page);
           if (blocked && retry < PAGE_MAX_RETRIES) {
@@ -53,7 +66,7 @@ export class SeekScraper implements JobSourceScraper {
             continue;
           }
 
-          pageJobs = await scrapePageWithClickThrough(page, scrapeStart);
+          pageJobs = await scrapePageWithClickThrough(page, scrapeStart, controller, pageNum, maxPages, allJobs.length);
           if (pageJobs.length === 0 && retry < PAGE_MAX_RETRIES) {
             await sleep(PAGE_RETRY_DELAY_MS * Math.pow(2, retry));
             continue;
@@ -70,10 +83,17 @@ export class SeekScraper implements JobSourceScraper {
         }
       }
       // Save cookies after scraping (may have refreshed session)
-      await saveCookies(context, "seek");
+      if (!controller.stopped) {
+        await saveCookies(context, "seek").catch(() => {});
+      }
       return allJobs;
+    } catch (err) {
+      if (isBrowserClosedError(err)) return [];
+      throw err;
     } finally {
-      await browser.close();
+      if (!controller.stopped) {
+        await browser.close().catch(() => {});
+      }
     }
   }
 }
@@ -114,7 +134,14 @@ async function scrollToBottom(page: Page): Promise<void> {
   await sleep(300);
 }
 
-async function scrapePageWithClickThrough(page: Page, scrapeStart: number): Promise<ScrapedJob[]> {
+async function scrapePageWithClickThrough(
+  page: Page,
+  scrapeStart: number,
+  controller: StopController,
+  currentPage: number,
+  totalPages: number,
+  previousJobCount: number,
+): Promise<ScrapedJob[]> {
   await page
     .waitForSelector('[data-testid="job-card"], article[data-card-type="JobCard"]', { timeout: 15000 })
     .catch(() => null);
@@ -124,20 +151,32 @@ async function scrapePageWithClickThrough(page: Page, scrapeStart: number): Prom
     .all();
 
   const jobs: ScrapedJob[] = [];
+  const totalCards = Math.min(cards.length, 30);
 
-  for (const card of cards.slice(0, 30)) {
+  for (let i = 0; i < totalCards; i++) {
+    if (controller.stopped) break;
     if (Date.now() - scrapeStart > TOTAL_SCRAPE_TIMEOUT_MS) break;
+
+    await updateOverlayProgress(page, {
+      source: "SEEK",
+      currentJob: i + 1,
+      totalCards,
+      currentPage,
+      totalPages,
+      jobsCollected: previousJobCount + jobs.length,
+    });
 
     try {
       const cardJob = await withTimeout(
-        processCard(page, card),
+        processCard(page, cards[i]),
         CARD_TIMEOUT_MS,
       );
       if (cardJob) {
         jobs.push(cardJob);
       }
       await sleep(BASE_DELAY_MS);
-    } catch {
+    } catch (err) {
+      if (isBrowserClosedError(err)) break;
       await sleep(ERROR_DELAY_MS);
     }
   }

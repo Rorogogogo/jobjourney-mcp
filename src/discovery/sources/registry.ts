@@ -13,7 +13,7 @@ const DISCOVERY_SOURCE_DEFINITIONS: ReadonlyArray<DiscoverySourceDefinition> = [
   { name: "linkedin", transport: "http", status: "active" },
   { name: "seek", transport: "browser", status: "active" },
   { name: "indeed", transport: "browser", status: "planned" },
-  { name: "jora", transport: "browser", status: "planned" },
+  { name: "jora", transport: "browser", status: "active" },
 ];
 
 export const DISCOVERY_SOURCE_NAMES = DISCOVERY_SOURCE_DEFINITIONS.map(

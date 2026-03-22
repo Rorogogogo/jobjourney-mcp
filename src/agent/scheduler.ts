@@ -4,6 +4,7 @@ import { SchedulesRepo } from "../storage/sqlite/schedules-repo.js";
 import { runDiscovery } from "../discovery/core/run-discovery.js";
 import { DiscoveryJobsRepo } from "../discovery/storage/discovery-jobs-repo.js";
 import { ScrapeRunsRepo } from "../storage/sqlite/scrape-runs-repo.js";
+import { onScrapeComplete } from "../tools/post-scrape.js";
 
 interface AgentSchedulerDeps {
   runDiscovery?: typeof runDiscovery;
@@ -98,6 +99,19 @@ export class AgentScheduler {
       });
       runsRepo.finishRun(run.id, { status: "success", jobCount: result.jobs.length });
       new SchedulesRepo(db).updateLastRunAt(id);
+      // Post-scrape: notify backend + open browser
+      void onScrapeComplete({
+        runId: run.id,
+        keyword,
+        location,
+        sources: selectedSources,
+        totalJobs: result.jobs.length,
+        jobs: result.jobs.map((j: any) => ({
+          title: j.title,
+          company: j.company,
+          location: j.location,
+        })),
+      });
     } catch (error) {
       runsRepo.finishRun(run.id, {
         status: "error",

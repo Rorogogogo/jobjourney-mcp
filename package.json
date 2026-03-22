@@ -52,6 +52,7 @@
     "vitest": "^3.0.0"
   },
   "dependencies": {
+    "@microsoft/signalr": "^10.0.0",
     "better-sqlite3": "^12.4.5",
     "fastmcp": "^3.33.0",
     "node-cron": "^3.0.0",

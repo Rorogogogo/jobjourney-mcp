@@ -1,10 +1,36 @@
-import type { DiscoveryJob } from "../core/types.js";
+import { JoraScraper } from "../../scraper/sources/jora.js";
+import { createEmptyDiscoveryJob, type DiscoveryJob } from "../core/types.js";
 import type { DiscoverSourceRequest, DiscoverySourceRunner } from "./base.js";
 
 export class JoraBrowserSource implements DiscoverySourceRunner {
   readonly name = "jora" as const;
 
-  async discoverJobs(_request: DiscoverSourceRequest): Promise<DiscoveryJob[]> {
-    throw new Error("Jora browser discovery is planned but not implemented yet.");
+  private readonly scraper = new JoraScraper();
+
+  async discoverJobs(request: DiscoverSourceRequest): Promise<DiscoveryJob[]> {
+    const jobs = await this.scraper.scrape({
+      keyword: request.keyword,
+      location: request.location,
+      source: "jora",
+      maxPages: request.pages,
+    });
+
+    return jobs.map((job) => {
+      const normalized = createEmptyDiscoveryJob({
+        id: job.url || `${job.company}:${job.title}:${job.location}`,
+        source: "jora",
+        title: job.title,
+        company: job.company,
+        location: job.location,
+        description: job.description || "",
+        jobUrl: job.url,
+        postedAt: job.postedDate || null,
+        extractedAt: job.scrapedAt || request.extractedAt,
+      });
+      normalized.externalUrl = job.externalUrl || "";
+      normalized.salary = job.salary || "";
+      normalized.jobType = job.jobType || "";
+      return normalized;
+    });
   }
 }

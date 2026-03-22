@@ -12,6 +12,7 @@ import { runDiscovery } from "../discovery/core/run-discovery.js";
 import { getActiveDiscoverySourceNames } from "../discovery/sources/registry.js";
 import { DiscoveryJobsRepo } from "../discovery/storage/discovery-jobs-repo.js";
 import { PLUGIN_NAME, PLUGIN_VERSION } from "../version.js";
+import { onScrapeComplete } from "./post-scrape.js";
 
 interface LocalScrapingToolDeps {
   runDiscovery?: typeof runDiscovery;
@@ -255,6 +256,20 @@ export function registerLocalScrapingTools(
           runsRepo.finishRun(run.id, {
             status: "success",
             jobCount: result.jobs.length,
+          });
+
+          // Post-scrape: notify backend + open browser
+          void onScrapeComplete({
+            runId: run.id,
+            keyword: args.keyword,
+            location: args.location,
+            sources: selectedSources,
+            totalJobs: result.jobs.length,
+            jobs: result.jobs.map((j) => ({
+              title: j.title,
+              company: j.company,
+              location: j.location,
+            })),
           });
 
           return JSON.stringify(
