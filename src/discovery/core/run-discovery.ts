@@ -14,6 +14,7 @@ import { SeekBrowserSource } from "../sources/seek-browser.js";
 import { IndeedBrowserSource } from "../sources/indeed-browser.js";
 import { JoraBrowserSource } from "../sources/jora-browser.js";
 import { getActiveDiscoverySourceNames } from "../sources/registry.js";
+import { crossPlatformDedupKey, jobRichness } from "./normalize.js";
 import type { DiscoverySourceRunner } from "../sources/base.js";
 import type { AtsProviderName } from "../ats/registry.js";
 import type { DiscoveryJob, DiscoveryRunOptions, DiscoveryRunResult, DiscoverySourceName } from "./types.js";
@@ -77,6 +78,8 @@ export async function runDiscovery(
   const expandedCompanyKeys = new Set<string>();
   const careerDiscoveryCache = new Map<string, unknown>();
   const seenJobs = new Set<string>();
+  /** Maps normalized company+title → index in `jobs` array for cross-platform dedup. */
+  const crossPlatformSeen = new Map<string, number>();
   const sourceResults = await mapWithConcurrency(
     selectedSources,
     2,
@@ -206,9 +209,26 @@ export async function runDiscovery(
       expandedCompanies.push(...result.expandedCompanies);
       const batchJobs: DiscoveryJob[] = [];
       for (const job of result.jobs) {
-        if (pushJob(jobs, seenJobs, job)) {
-          batchJobs.push(job);
+        if (!pushJob(jobs, seenJobs, job)) continue;
+
+        // Cross-platform dedup: same company+title from different sources
+        const xKey = crossPlatformDedupKey(job);
+        const existingIdx = crossPlatformSeen.get(xKey);
+        if (existingIdx !== undefined) {
+          // Keep the version with richer data
+          const existing = jobs[existingIdx];
+          if (jobRichness(job) > jobRichness(existing)) {
+            jobs[existingIdx] = job;
+            // Replace in batch if the existing was in current batch
+            const batchIdx = batchJobs.indexOf(existing);
+            if (batchIdx !== -1) batchJobs[batchIdx] = job;
+          }
+          // Pop the duplicate we just pushed
+          jobs.pop();
+          continue;
         }
+        crossPlatformSeen.set(xKey, jobs.length - 1);
+        batchJobs.push(job);
       }
       if (batchJobs.length > 0) {
         dependencies.onJobsBatch?.(batchJobs, result.sourceName);
@@ -218,12 +238,18 @@ export async function runDiscovery(
     }
   }
 
+  const dedupedCount = Array.from(crossPlatformSeen.values()).length;
+  const totalBeforeDedup = sourceResults.reduce(
+    (sum, r) => sum + (r.success ? r.jobs.length : 0),
+    0,
+  );
   logger?.({
     event: "discovery_run_complete",
     successfulSources,
     failedSources,
     totalJobs: jobs.length,
     expandedCompanies,
+    crossPlatformDuplicatesRemoved: totalBeforeDedup - jobs.length,
   });
   return {
     jobs,

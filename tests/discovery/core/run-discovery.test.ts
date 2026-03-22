@@ -165,6 +165,59 @@ describe("runDiscovery", () => {
     });
   });
 
+  it("deduplicates the same job found on different platforms, keeping the richer version", async () => {
+    const linkedinJob = createEmptyDiscoveryJob({
+      id: "li-99",
+      source: "linkedin",
+      title: "Full Stack Developer",
+      company: "Acme Corp",
+      location: "Sydney",
+      description: "",
+      jobUrl: "https://www.linkedin.com/jobs/view/99",
+      extractedAt: "2026-03-17T00:00:00Z",
+    });
+
+    const seekJob = createEmptyDiscoveryJob({
+      id: "seek-99",
+      source: "seek",
+      title: "Full Stack Developer",
+      company: "Acme Corp Pty Ltd",
+      location: "Sydney",
+      description: "Great role with React and Node.js.",
+      jobUrl: "https://www.seek.com.au/job/99",
+      extractedAt: "2026-03-17T00:00:00Z",
+    });
+    seekJob.salary = "$120k-$150k";
+
+    const result = await runDiscovery(
+      {
+        keyword: "developer",
+        location: "Sydney",
+        sources: ["linkedin", "seek"],
+      },
+      {
+        sourceFactories: {
+          linkedin: () => ({
+            name: "linkedin",
+            discoverJobs: async () => [linkedinJob],
+          }),
+          seek: () => ({
+            name: "seek",
+            discoverJobs: async () => [seekJob],
+          }),
+        },
+        atsCrawlerFactories: {},
+        extractedAt: () => "2026-03-17T00:00:00Z",
+      },
+    );
+
+    // Should deduplicate to 1 job, keeping the Seek version (richer data)
+    expect(result.jobs).toHaveLength(1);
+    expect(result.jobs[0].source).toBe("seek");
+    expect(result.jobs[0].salary).toBe("$120k-$150k");
+    expect(result.jobs[0].description).toBe("Great role with React and Node.js.");
+  });
+
   it("expands supported ATS companies only once per ats/company pair", async () => {
     const crawlJobs = vi.fn(async () => [
       createEmptyDiscoveryJob({
