@@ -33,7 +33,7 @@ describe("discovery source registry", () => {
     expect(getDiscoverySourceDefinition("jora")).toMatchObject({
       name: "jora",
       transport: "browser",
-      status: "planned",
+      status: "active",
     });
   });
 });
