@@ -35,7 +35,7 @@ export async function resolveApplyUrl(
 
   try {
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
-    const resolved = await clickApplyAndCaptureUrl(page, site, context, onProgress);
+    const resolved = await clickApplyAndCaptureUrl(page, site, context, onProgress, url);
     return resolved ?? url;
   } finally {
     await context.close();
@@ -47,6 +47,7 @@ async function clickApplyAndCaptureUrl(
   site: AggregatorSite,
   context: BrowserContext,
   onProgress?: (msg: string) => void,
+  originalUrl?: string,
 ): Promise<string | null> {
   const selectors: Record<AggregatorSite, string[]> = {
     linkedin: [
@@ -107,10 +108,10 @@ async function clickApplyAndCaptureUrl(
     return resolved;
   }
 
-  // Same-page navigation fallback
+  // Same-page navigation fallback — check if URL changed from original
   await page.waitForLoadState("domcontentloaded", { timeout: 10_000 }).catch(() => {});
   const resolved = page.url();
-  if (resolved === page.url()) {
+  if (resolved !== originalUrl) {
     onProgress?.(`Resolved to: ${resolved}`);
     return resolved;
   }
