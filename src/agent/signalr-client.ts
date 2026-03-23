@@ -1,6 +1,5 @@
 import * as signalR from "@microsoft/signalr";
 import { openDatabase } from "../storage/sqlite/db.js";
-import { runAutoApplyPipeline } from "../auto-apply/pipeline.js";
 
 export interface SignalRClientOptions {
   apiUrl: string;
@@ -56,24 +55,17 @@ export async function createSignalRClient(options: SignalRClientOptions): Promis
   connection.on(
     "TriggerAutoApply",
     async (request: { requestId: string; jobUrl: string }) => {
-      console.log("[agent] TriggerAutoApply:", request.requestId, request.jobUrl);
-
-      const sendProgress = async (message: string) => {
-        try {
-          await connection.invoke("AutoApplyProgress", request.requestId, { message });
-        } catch (err) {
-          console.error("[agent] AutoApplyProgress send error:", err);
-        }
-      };
-
+      console.warn(
+        "[agent] TriggerAutoApply is deprecated — use MCP auto-apply tools instead.",
+        request.requestId,
+      );
       try {
-        const result = await runAutoApplyPipeline({ ...request, apiKey: options.apiKey }, sendProgress);
-        await connection.invoke("AutoApplyComplete", request.requestId, result);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        await connection
-          .invoke("AutoApplyComplete", request.requestId, { success: false, error: message })
-          .catch(() => {});
+        await connection.invoke("AutoApplyComplete", request.requestId, {
+          success: false,
+          error: "TriggerAutoApply is deprecated. Use the MCP auto-apply tools via the AI agent instead.",
+        });
+      } catch {
+        // ignore
       }
     },
   );
