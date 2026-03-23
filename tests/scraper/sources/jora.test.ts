@@ -2,7 +2,14 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { chromium, type Browser, type Page } from "playwright";
 import { dismissPopups } from "../../../src/scraper/sources/jora.js";
 
-describe("JoraScraper popup handling", () => {
+let canLaunchBrowser = true;
+try {
+  await chromium.launch({ headless: true }).then((b) => b.close());
+} catch {
+  canLaunchBrowser = false;
+}
+
+describe.skipIf(!canLaunchBrowser)("JoraScraper popup handling", () => {
   let browser: Browser;
   let page: Page;
 
