@@ -16,6 +16,7 @@ import { registerChatbotTools } from "./tools/chatbot.js";
 import { registerScrapingTools } from "./tools/scraping.js";
 import { registerAnalyticsTools } from "./tools/analytics.js";
 import { registerLocalScrapingTools } from "./tools/local-scraping.js";
+import { registerAutoApplyTools } from "./auto-apply/tools.js";
 import { SessionAuth } from "./types.js";
 import { PLUGIN_NAME, PLUGIN_VERSION } from "./version.js";
 
@@ -68,6 +69,7 @@ registerChatbotTools(server);
 registerScrapingTools(server);
 registerAnalyticsTools(server);
 registerLocalScrapingTools(server);
+registerAutoApplyTools(server);
 
 if (transport === "httpStream") {
   const port = parseInt(process.env.PORT || "8080", 10);
