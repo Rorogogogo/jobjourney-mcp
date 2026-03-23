@@ -239,7 +239,7 @@ function extractCompanyLogoUrl(html: string): string {
   for (const pattern of patterns) {
     const match = html.match(pattern);
     if (!match) continue;
-    const url = (match.at(-1) ?? "").trim();
+    const url = decodeHtmlEntities((match.at(-1) ?? "").trim());
     if (url && !url.includes("data:image")) {
       return url;
     }

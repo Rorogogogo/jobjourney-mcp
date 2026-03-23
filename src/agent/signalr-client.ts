@@ -52,6 +52,24 @@ export async function createSignalRClient(options: SignalRClientOptions): Promis
     }
   });
 
+  connection.on(
+    "TriggerAutoApply",
+    async (request: { requestId: string; jobUrl: string }) => {
+      console.warn(
+        "[agent] TriggerAutoApply is deprecated — use MCP auto-apply tools instead.",
+        request.requestId,
+      );
+      try {
+        await connection.invoke("AutoApplyComplete", request.requestId, {
+          success: false,
+          error: "TriggerAutoApply is deprecated. Use the MCP auto-apply tools via the AI agent instead.",
+        });
+      } catch {
+        // ignore
+      }
+    },
+  );
+
   connection.onreconnected(() => {
     console.log("[agent] SignalR reconnected");
   });

@@ -20,13 +20,16 @@ export function registerDocumentTools(server: FastMCP<SessionAuth>) {
 
       if (docType === "all" || docType === "cvs") {
         const cvData = (await apiCall("/api/document/cvs", {}, apiKey)) as {
-          items?: Array<{ id: string; name: string; createdOnUtc: string }>;
+          items?: Array<{ id: string; name: string; createdOnUtc: string; isPrimary?: boolean; fileUrl?: string }>;
         };
         const cvs = cvData.items || [];
         if (cvs.length > 0) {
           results.push("CVs:");
           cvs.forEach((cv, i) => {
-            results.push(`  ${i + 1}. ${cv.name} (${new Date(cv.createdOnUtc).toLocaleDateString()})\n     ID: ${cv.id}`);
+            const primary = cv.isPrimary ? " [PRIMARY]" : "";
+            results.push(
+              `  ${i + 1}. ${cv.name}${primary} (${new Date(cv.createdOnUtc).toLocaleDateString()})\n     ID: ${cv.id}\n     File: ${cv.fileUrl ?? "n/a"}`
+            );
           });
         } else {
           results.push("CVs: None");
