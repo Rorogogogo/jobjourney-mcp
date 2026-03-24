@@ -276,7 +276,7 @@ async function processCard(
 
 /**
  * Follow Jora's /job/rd/ redirect using the browser context to bypass Cloudflare.
- * Opens the redirect URL in a new tab, captures the final URL, then closes the tab.
+ * Uses context.request (API-level fetch) which shares cookies but doesn't open a tab.
  */
 async function resolveApplyRedirect(page: Page, applyPath: string): Promise<string | undefined> {
   try {
@@ -285,19 +285,16 @@ async function resolveApplyRedirect(page: Page, applyPath: string): Promise<stri
       : `https://au.jora.com${applyPath}`;
 
     const context = page.context();
-    const newPage = await context.newPage();
-    try {
-      // Navigate but don't wait for full load — we just need the redirect
-      await newPage.goto(url, { waitUntil: "commit", timeout: 10000 });
-      const finalUrl = newPage.url();
-      // Only return if we actually redirected away from Jora
-      if (finalUrl && !finalUrl.includes("jora.com")) {
-        return finalUrl.split("?")[0]; // Strip tracking params
-      }
-      return undefined;
-    } finally {
-      await newPage.close();
+    const response = await context.request.fetch(url, {
+      timeout: 10000,
+      maxRedirects: 5,
+    });
+    const finalUrl = response.url();
+    // Only return if we actually redirected away from Jora
+    if (finalUrl && !finalUrl.includes("jora.com")) {
+      return finalUrl.split("?")[0]; // Strip tracking params
     }
+    return undefined;
   } catch {
     return undefined;
   }

@@ -44,6 +44,11 @@ const APPLICANT_COUNT_PATTERNS = [
 ];
 
 export function enrichDiscoveryJob(job: DiscoveryJob): DiscoveryJob {
+  // Normalize relative posted dates (e.g. "3d ago") to ISO strings
+  if (job.postedAt && !isIsoDate(job.postedAt)) {
+    job.postedAt = normalizePostedDate(job.postedAt);
+  }
+
   const analysis = analyzeJobDescription(job.description || "");
 
   const salarySource =
@@ -250,4 +255,93 @@ function decodeHtmlEntities(text: string): string {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'");
+}
+
+// ---------------------------------------------------------------------------
+// Posted-date normalization
+// ---------------------------------------------------------------------------
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}/;
+
+function isIsoDate(value: string): boolean {
+  return ISO_DATE_RE.test(value);
+}
+
+/**
+ * Convert a relative date string (e.g. "3d ago", "Posted 2w ago", "30+ days ago",
+ * "2 weeks ago", "1 month ago", "yesterday") into an ISO date string.
+ * Returns null if the string can't be parsed.
+ */
+export function normalizePostedDate(raw: string): string | null {
+  const s = raw.toLowerCase().trim();
+  const now = new Date();
+
+  if (s.includes("today") || s === "just posted" || s === "just now") {
+    return toIsoDate(now);
+  }
+
+  if (s.includes("yesterday")) {
+    now.setDate(now.getDate() - 1);
+    return toIsoDate(now);
+  }
+
+  // "3d ago", "3 days ago", "30+ days ago", "Posted 3d ago"
+  const daysMatch = s.match(/(\d+)\+?\s*d(?:ays?)?\s*ago/);
+  if (daysMatch) {
+    now.setDate(now.getDate() - parseInt(daysMatch[1], 10));
+    return toIsoDate(now);
+  }
+
+  // "2w ago", "2 weeks ago", "Posted 1w ago"
+  const weeksMatch = s.match(/(\d+)\+?\s*w(?:eeks?)?\s*ago/);
+  if (weeksMatch) {
+    now.setDate(now.getDate() - parseInt(weeksMatch[1], 10) * 7);
+    return toIsoDate(now);
+  }
+
+  // "1 month ago", "2m ago", "3 months ago", "Posted 1mo ago"
+  const monthsMatch = s.match(/(\d+)\+?\s*(?:mo(?:nths?)?|m)\s*ago/);
+  if (monthsMatch) {
+    now.setMonth(now.getMonth() - parseInt(monthsMatch[1], 10));
+    return toIsoDate(now);
+  }
+
+  // "1 year ago", "2y ago"
+  const yearsMatch = s.match(/(\d+)\+?\s*y(?:ears?)?\s*ago/);
+  if (yearsMatch) {
+    now.setFullYear(now.getFullYear() - parseInt(yearsMatch[1], 10));
+    return toIsoDate(now);
+  }
+
+  // "1 hour ago", "3 hours ago", "2h ago"
+  const hoursMatch = s.match(/(\d+)\+?\s*h(?:ours?)?\s*ago/);
+  if (hoursMatch) {
+    now.setHours(now.getHours() - parseInt(hoursMatch[1], 10));
+    return toIsoDate(now);
+  }
+
+  // "5 minutes ago", "10min ago"
+  const minutesMatch = s.match(/(\d+)\+?\s*min(?:utes?)?\s*ago/);
+  if (minutesMatch) {
+    return toIsoDate(now); // same day
+  }
+
+  // "Reposted 3d ago"
+  const repostedMatch = s.match(/reposted\s+(\d+)\+?\s*d(?:ays?)?\s*ago/);
+  if (repostedMatch) {
+    now.setDate(now.getDate() - parseInt(repostedMatch[1], 10));
+    return toIsoDate(now);
+  }
+
+  // If it already looks like a parseable date string, try Date.parse
+  const parsed = Date.parse(raw);
+  if (!Number.isNaN(parsed)) {
+    return toIsoDate(new Date(parsed));
+  }
+
+  return null;
+}
+
+function toIsoDate(date: Date): string {
+  return date.toISOString().replace(/\.\d{3}Z$/, "Z");
 }

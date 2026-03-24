@@ -32,7 +32,20 @@ export async function createSignalRClient(options: SignalRClientOptions): Promis
                   salary, job_type AS jobType,
                   work_arrangement AS workArrangement,
                   company_logo_url AS companyLogoUrl,
-                  required_skills AS requiredSkills
+                  required_skills AS requiredSkills,
+                  description,
+                  tech_stack AS techStack,
+                  applicant_count AS applicantCount,
+                  experience_level AS experienceLevel,
+                  experience_years AS experienceYears,
+                  salary_min AS salaryMin,
+                  salary_max AS salaryMax,
+                  salary_currency AS salaryCurrency,
+                  salary_period AS salaryPeriod,
+                  is_pr_required AS isPrRequired,
+                  security_clearance AS securityClearance,
+                  is_already_applied AS isAlreadyApplied,
+                  applied_date_utc AS appliedDateUtc
            FROM jobs
            WHERE run_id = ?
            ORDER BY rowid ASC`,
