@@ -106,4 +106,30 @@ export class SchedulesRepo {
       `)
       .run({ id });
   }
+
+  toggle(id: number, enabled: boolean): boolean {
+    const result = this.db
+      .prepare<{ id: number; enabled: number }>(`
+        UPDATE schedules
+        SET enabled = @enabled, updated_at = datetime('now')
+        WHERE id = @id
+      `)
+      .run({ id, enabled: enabled ? 1 : 0 });
+    return result.changes > 0;
+  }
+
+  delete(id: number): boolean {
+    const result = this.db
+      .prepare<ScheduleIdParam>(`
+        DELETE FROM schedules
+        WHERE id = @id
+      `)
+      .run({ id });
+    return result.changes > 0;
+  }
+
+  deleteAll(): number {
+    const result = this.db.prepare(`DELETE FROM schedules`).run();
+    return result.changes;
+  }
 }

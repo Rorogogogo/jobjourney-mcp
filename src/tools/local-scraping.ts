@@ -382,6 +382,109 @@ export function registerLocalScrapingTools(
     },
   });
 
+  // ── Schedule management tools ───────────────────────────────────────
+
+  server.addTool({
+    name: "list_schedules",
+    description:
+      "List all scheduled job discovery cron jobs, including disabled ones. Shows schedule ID, keyword, location, sources, cron expression, enabled status, and last run time.",
+    parameters: z.object({}),
+    execute: async () => {
+      const db = openDatabaseImpl();
+      try {
+        const repo = new SchedulesRepo(db);
+        const schedules = repo.list(false);
+
+        if (schedules.length === 0) {
+          return "No schedules found. Use schedule_jobs to create one.";
+        }
+
+        return schedules
+          .map((s) => {
+            const status = s.enabled ? "✅ enabled" : "❌ disabled";
+            const lastRun = s.last_run_at ?? "never";
+            return [
+              `ID: ${s.id} [${status}]`,
+              `  Keyword: ${s.keyword}`,
+              `  Location: ${s.location}`,
+              `  Sources: ${s.sources ?? s.source}`,
+              `  Pages: ${s.pages ?? 30}`,
+              `  Cron: ${s.cron}`,
+              `  Last run: ${lastRun}`,
+              `  Created: ${s.created_at}`,
+            ].join("\n");
+          })
+          .join("\n\n");
+      } finally {
+        db.close();
+      }
+    },
+  });
+
+  server.addTool({
+    name: "toggle_schedule",
+    description:
+      "Enable or disable a scheduled job discovery cron job by its ID. The agent will pick up changes on its next reconcile cycle (within 60 seconds).",
+    parameters: z.object({
+      id: z.number().describe("Schedule ID to toggle"),
+      enabled: z.boolean().describe("true to enable, false to disable"),
+    }),
+    execute: async (args) => {
+      const db = openDatabaseImpl();
+      try {
+        const repo = new SchedulesRepo(db);
+        const changed = repo.toggle(args.id, args.enabled);
+        if (!changed) {
+          return `Schedule ID ${args.id} not found.`;
+        }
+        return `Schedule ${args.id} ${args.enabled ? "enabled" : "disabled"}. The agent will update within 60 seconds.`;
+      } finally {
+        db.close();
+      }
+    },
+  });
+
+  server.addTool({
+    name: "delete_schedule",
+    description:
+      "Permanently delete a scheduled job discovery cron job by its ID. Use list_schedules to see available IDs.",
+    parameters: z.object({
+      id: z.number().describe("Schedule ID to delete"),
+    }),
+    execute: async (args) => {
+      const db = openDatabaseImpl();
+      try {
+        const repo = new SchedulesRepo(db);
+        const deleted = repo.delete(args.id);
+        if (!deleted) {
+          return `Schedule ID ${args.id} not found.`;
+        }
+        return `Schedule ${args.id} deleted. The agent will stop the cron task within 60 seconds.`;
+      } finally {
+        db.close();
+      }
+    },
+  });
+
+  server.addTool({
+    name: "delete_all_schedules",
+    description:
+      "Permanently delete ALL scheduled job discovery cron jobs. Use with caution.",
+    parameters: z.object({}),
+    execute: async () => {
+      const db = openDatabaseImpl();
+      try {
+        const repo = new SchedulesRepo(db);
+        const count = repo.deleteAll();
+        return count > 0
+          ? `Deleted ${count} schedule(s). The agent will stop all cron tasks within 60 seconds.`
+          : "No schedules to delete.";
+      } finally {
+        db.close();
+      }
+    },
+  });
+
   server.addTool({
     name: "get_latest_discovery_report",
     description:
