@@ -1,3 +1,12 @@
 {
-  "mcpServers": {}
+  "mcpServers": {
+    "jobjourney": {
+      "command": "node",
+      "args": ["${PLUGIN_ROOT}/dist/index.js"],
+      "env": {
+        "JOBJOURNEY_API_KEY": "",
+        "JOBJOURNEY_API_URL": "https://jobjourney.me/api"
+      }
+    }
+  }
 }

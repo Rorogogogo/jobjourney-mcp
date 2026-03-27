@@ -1,0 +1,14 @@
+{
+  "name": "jobjourney",
+  "description": "JobJourney plugins for Claude Code",
+  "owner": {
+    "name": "JobJourney"
+  },
+  "plugins": [
+    {
+      "name": "jobjourney",
+      "source": ".",
+      "description": "Track job applications, get AI resume evaluations, generate cover letters, prep for interviews, and manage coffee chat networking — all through Claude Code."
+    }
+  ]
+}

@@ -1,0 +1,322 @@
+import { launchBrowser, createStopController, injectScrapingOverlay, updateOverlayProgress, isBrowserClosedError, } from "../core/browser.js";
+const BASE_DELAY_MS = 400;
+const PAGE_NAV_DELAY_MS = 2000;
+const CLOUDFLARE_WAIT_MS = 8000;
+const MAX_TOTAL_JOBS = 500;
+const TOTAL_SCRAPE_TIMEOUT_MS = 15 * 60 * 1000;
+const CARD_TIMEOUT_MS = 15_000;
+const DETAIL_PANEL_WAIT_MS = 2000;
+function sleep(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+}
+export class JoraScraper {
+    async scrape(request) {
+        const browser = await launchBrowser();
+        const controller = createStopController(browser);
+        const scrapeStart = Date.now();
+        try {
+            const context = await browser.newContext();
+            const page = await context.newPage();
+            const maxPages = request.maxPages ?? 1;
+            const allJobs = [];
+            for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+                if (controller.stopped)
+                    break;
+                if (Date.now() - scrapeStart > TOTAL_SCRAPE_TIMEOUT_MS)
+                    break;
+                const url = buildJoraUrl(request.keyword, request.location, pageNum);
+                await page.goto(url, { waitUntil: "networkidle", timeout: 45000 });
+                // First page needs extra wait for Cloudflare challenge
+                if (pageNum === 1) {
+                    await waitForCloudflare(page);
+                }
+                else {
+                    await sleep(PAGE_NAV_DELAY_MS);
+                }
+                await dismissPopups(page);
+                await injectScrapingOverlay(page, controller);
+                const pageJobs = await scrapePageCards(page, scrapeStart, controller, pageNum, maxPages, allJobs.length);
+                if (pageJobs.length === 0)
+                    break;
+                allJobs.push(...pageJobs);
+                if (allJobs.length >= MAX_TOTAL_JOBS) {
+                    allJobs.length = MAX_TOTAL_JOBS;
+                    break;
+                }
+            }
+            return allJobs;
+        }
+        catch (err) {
+            if (isBrowserClosedError(err))
+                return [];
+            throw err;
+        }
+        finally {
+            if (!controller.stopped) {
+                await browser.close().catch(() => { });
+            }
+        }
+    }
+}
+export async function dismissPopups(page) {
+    try {
+        await page.evaluate(() => {
+            const scrollLockValues = new Set(["hidden", "clip"]);
+            const closeTextPatterns = [
+                /^close$/i,
+                /^dismiss$/i,
+                /^no thanks$/i,
+                /^not now$/i,
+                /^skip$/i,
+                /^maybe later$/i,
+                /^later$/i,
+                /^continue$/i,
+                /^continue without/i,
+            ];
+            const dialogSelectors = [
+                '[role="dialog"]',
+                '[aria-modal="true"]',
+                '[data-testid*="modal"]',
+                '[data-testid*="dialog"]',
+                '[class*="modal"]',
+                '[class*="dialog"]',
+                '[class*="popup"]',
+            ];
+            const dismissSelectors = [
+                '[aria-label*="close" i]',
+                '[aria-label*="dismiss" i]',
+                '[title*="close" i]',
+                '[title*="dismiss" i]',
+                '[data-testid*="close" i]',
+                '[data-testid*="dismiss" i]',
+                "button",
+                '[role="button"]',
+            ];
+            const textContent = (node) => node?.textContent?.replace(/\s+/g, " ").trim() ?? "";
+            const unlockScroll = (element) => {
+                const computed = window.getComputedStyle(element);
+                if (scrollLockValues.has(computed.overflow)) {
+                    element.style.setProperty("overflow", "auto", "important");
+                }
+                if (scrollLockValues.has(computed.overflowY)) {
+                    element.style.setProperty("overflow-y", "auto", "important");
+                }
+            };
+            const isVisible = (node) => {
+                if (!(node instanceof HTMLElement))
+                    return false;
+                const rect = node.getBoundingClientRect();
+                if (rect.width <= 0 || rect.height <= 0)
+                    return false;
+                const style = window.getComputedStyle(node);
+                return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
+            };
+            // Remove email alert nudge cards that sit between job cards
+            document.querySelectorAll(".email-alert-nudge-card").forEach((el) => el.remove());
+            // Remove any cookie consent banners
+            document.querySelectorAll('[class*="cookie-consent"], [class*="cookie-banner"], [id*="cookie"]').forEach((el) => el.remove());
+            // Remove any generic modal overlays
+            document.querySelectorAll('[class*="modal-overlay"], [class*="modal-backdrop"], [class*="overlay-backdrop"]').forEach((el) => el.remove());
+            const dialogCandidates = Array.from(document.querySelectorAll(dialogSelectors.join(",")))
+                .filter(isVisible)
+                .filter((el) => el.id !== "__jj-scrape-overlay");
+            for (const candidate of dialogCandidates) {
+                let dismissed = false;
+                for (const selector of dismissSelectors) {
+                    for (const control of Array.from(candidate.querySelectorAll(selector))) {
+                        if (!(control instanceof HTMLElement) || !isVisible(control))
+                            continue;
+                        const label = [
+                            textContent(control),
+                            control.getAttribute("aria-label")?.trim() ?? "",
+                            control.getAttribute("title")?.trim() ?? "",
+                        ].find(Boolean) ?? "";
+                        if (!label || !closeTextPatterns.some((pattern) => pattern.test(label))) {
+                            continue;
+                        }
+                        control.click();
+                        dismissed = true;
+                        break;
+                    }
+                    if (dismissed)
+                        break;
+                }
+                if (candidate.isConnected) {
+                    candidate.remove();
+                }
+            }
+            unlockScroll(document.documentElement);
+            unlockScroll(document.body);
+        });
+    }
+    catch {
+        // Page might have navigated — ignore
+    }
+}
+async function waitForCloudflare(page) {
+    const title = await page.title();
+    if (title.includes("Just a moment")) {
+        // Cloudflare challenge is active — wait for it to resolve
+        await page.waitForFunction(() => !document.title.includes("Just a moment"), { timeout: 30000 }).catch(() => null);
+        await sleep(CLOUDFLARE_WAIT_MS);
+    }
+    else {
+        await sleep(2000);
+    }
+}
+async function scrapePageCards(page, scrapeStart, controller, currentPage, totalPages, previousJobCount) {
+    await page
+        .waitForSelector(".job-card.result.organic-job", { timeout: 15000 })
+        .catch(() => null);
+    const cards = await page.locator(".job-card.result.organic-job").all();
+    const jobs = [];
+    const totalCards = Math.min(cards.length, 30);
+    for (let i = 0; i < totalCards; i++) {
+        if (controller.stopped)
+            break;
+        if (Date.now() - scrapeStart > TOTAL_SCRAPE_TIMEOUT_MS)
+            break;
+        await dismissPopups(page);
+        await updateOverlayProgress(page, {
+            source: "Jora",
+            currentJob: i + 1,
+            totalCards,
+            currentPage,
+            totalPages,
+            jobsCollected: previousJobCount + jobs.length,
+        });
+        try {
+            const job = await withTimeout(processCard(page, cards[i]), CARD_TIMEOUT_MS);
+            if (job) {
+                jobs.push(job);
+            }
+            await sleep(BASE_DELAY_MS);
+        }
+        catch (err) {
+            if (isBrowserClosedError(err))
+                break;
+            // skip failed card
+        }
+    }
+    return jobs;
+}
+async function processCard(page, card) {
+    await dismissPopups(page);
+    const basicInfo = await extractBasicInfoFromCard(card);
+    if (!basicInfo.title || !basicInfo.url)
+        return null;
+    // Click card to open split-serp detail panel
+    const clickTarget = card.locator("a.job-link.-desktop-only").first();
+    await clickTarget.click().catch(() => card.click());
+    await sleep(DETAIL_PANEL_WAIT_MS);
+    await dismissPopups(page);
+    // Try to extract detail from side panel
+    const details = await extractDetailPanel(page);
+    // Resolve the apply redirect using the browser context (Cloudflare blocks plain fetch)
+    let externalUrl;
+    if (details?.applyUrl) {
+        externalUrl = await resolveApplyRedirect(page, details.applyUrl);
+    }
+    return {
+        title: basicInfo.title,
+        company: basicInfo.company || "",
+        location: basicInfo.location || "",
+        url: basicInfo.url,
+        externalUrl,
+        source: "jora",
+        description: details?.description || basicInfo.abstract || undefined,
+        salary: details?.salary || basicInfo.salary || undefined,
+        postedDate: basicInfo.postedDate || undefined,
+        jobType: basicInfo.jobType || undefined,
+        scrapedAt: new Date().toISOString(),
+    };
+}
+/**
+ * Follow Jora's /job/rd/ redirect using the browser context to bypass Cloudflare.
+ * Uses context.request (API-level fetch) which shares cookies but doesn't open a tab.
+ */
+async function resolveApplyRedirect(page, applyPath) {
+    try {
+        const url = applyPath.startsWith("http")
+            ? applyPath
+            : `https://au.jora.com${applyPath}`;
+        const context = page.context();
+        const response = await context.request.fetch(url, {
+            timeout: 10000,
+            maxRedirects: 5,
+        });
+        const finalUrl = response.url();
+        // Only return if we actually redirected away from Jora
+        if (finalUrl && !finalUrl.includes("jora.com")) {
+            return finalUrl.split("?")[0]; // Strip tracking params
+        }
+        return undefined;
+    }
+    catch {
+        return undefined;
+    }
+}
+async function extractBasicInfoFromCard(card) {
+    return card.evaluate((el) => {
+        const getText = (selector) => el.querySelector(selector)?.textContent?.trim() ?? "";
+        // Title: get from the desktop link to avoid duplication
+        const titleLink = el.querySelector("a.job-link.-desktop-only");
+        const title = titleLink?.textContent?.trim() ?? getText(".job-title");
+        const company = getText(".job-company");
+        const location = getText(".job-location");
+        const abstract = getText(".job-abstract");
+        const postedDate = getText(".job-listed-date");
+        // URL from the job link
+        const href = titleLink?.getAttribute("href") ?? "";
+        const url = href.startsWith("http") ? href : href ? `https://au.jora.com${href}` : "";
+        // Salary (sometimes in a badge or dedicated element)
+        const salary = getText(".job-salary");
+        // Job type and salary from badges (skip "New to you")
+        const jobTypeParts = [];
+        let badgeSalary = salary;
+        el.querySelectorAll(".badge").forEach((b) => {
+            const text = b.textContent?.trim() ?? "";
+            if (!text || text.includes("New to you"))
+                return;
+            // Salary badges contain $ or "a year"/"a month"
+            if (/\$|a\s+year|a\s+month|per\s+annum/i.test(text)) {
+                if (!badgeSalary)
+                    badgeSalary = text;
+            }
+            else {
+                jobTypeParts.push(text);
+            }
+        });
+        const jobType = jobTypeParts.join(", ");
+        return { title, company, location, url, abstract, postedDate, salary: badgeSalary, jobType };
+    });
+}
+async function extractDetailPanel(page) {
+    return page.evaluate(() => {
+        const container = document.querySelector(".job-description-container");
+        if (!container)
+            return null;
+        const description = container.innerText
+            ?.replace(/\n{3,}/g, "\n\n")
+            .trim() ?? "";
+        // Salary sometimes appears in the detail panel header
+        const salaryEl = document.querySelector(".job-view-salary, .salary");
+        const salary = salaryEl?.textContent?.trim() ?? "";
+        // Apply URL
+        const applyLink = document.querySelector("a.apply-button");
+        const applyUrl = applyLink?.getAttribute("href") ?? "";
+        return { description, salary, applyUrl };
+    });
+}
+function withTimeout(promise, ms) {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(`Timed out after ${ms}ms`)), ms);
+        promise.then((value) => { clearTimeout(timer); resolve(value); }, (err) => { clearTimeout(timer); reject(err); });
+    });
+}
+function buildJoraUrl(keyword, location, pageNum) {
+    const params = new URLSearchParams({ q: keyword, l: location });
+    if (pageNum > 1)
+        params.set("p", String(pageNum));
+    return `https://au.jora.com/j?${params.toString()}`;
+}

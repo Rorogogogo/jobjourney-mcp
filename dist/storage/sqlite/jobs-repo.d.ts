@@ -1,0 +1,94 @@
+import Database from "better-sqlite3";
+export interface JobRecordInput {
+    title: string;
+    company: string;
+    location: string;
+    url: string;
+    jobUrl?: string;
+    externalUrl?: string;
+    source: string;
+    atsType?: string;
+    atsIdentifier?: string;
+    description?: string;
+    salary?: string;
+    postedDate?: string;
+    postedAt?: string;
+    jobType?: string;
+    workplaceType?: string;
+    workArrangement?: string;
+    companyLogoUrl?: string;
+    applicantCount?: string;
+    isAlreadyApplied?: boolean;
+    appliedDateUtc?: string;
+    scrapedAt: string;
+    extractedAt?: string;
+    salaryRaw?: string;
+    salaryMin?: string;
+    salaryMax?: string;
+    salaryCurrency?: string;
+    salaryPeriod?: string;
+    requiredSkills?: string;
+    techStack?: string;
+    experienceLevel?: string;
+    experienceYears?: number | null;
+    isPrRequired?: boolean;
+    securityClearance?: string;
+    prConfidence?: string;
+    prReasoning?: string;
+    runId?: number;
+    keyword?: string;
+    searchLocation?: string;
+}
+export interface JobSearchFilters {
+    keyword?: string;
+    location?: string;
+    source?: string;
+    limit?: number;
+}
+export interface JobRow {
+    id: number;
+    title: string;
+    company: string;
+    location: string;
+    url: string;
+    job_url: string | null;
+    external_url: string | null;
+    source: string;
+    ats_type: string | null;
+    ats_identifier: string | null;
+    description: string | null;
+    salary: string | null;
+    posted_date: string | null;
+    posted_at: string | null;
+    job_type: string | null;
+    workplace_type: string | null;
+    work_arrangement: string | null;
+    company_logo_url: string | null;
+    applicant_count: string | null;
+    is_already_applied: number;
+    applied_date_utc: string | null;
+    scraped_at: string;
+    extracted_at: string | null;
+    salary_raw: string | null;
+    salary_min: string | null;
+    salary_max: string | null;
+    salary_currency: string | null;
+    salary_period: string | null;
+    required_skills: string | null;
+    tech_stack: string | null;
+    experience_level: string | null;
+    experience_years: number | null;
+    is_pr_required: number;
+    security_clearance: string | null;
+    pr_confidence: string | null;
+    pr_reasoning: string | null;
+    run_id: number | null;
+    keyword: string | null;
+    search_location: string | null;
+}
+export declare class JobsRepo {
+    private readonly db;
+    constructor(db: Database.Database);
+    upsertJobs(jobs: JobRecordInput[]): void;
+    search(filters: JobSearchFilters): JobRow[];
+}

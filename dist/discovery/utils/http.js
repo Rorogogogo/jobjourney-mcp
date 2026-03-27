@@ -1,0 +1,84 @@
+import { RateLimiter } from "./rate-limit.js";
+export const DEFAULT_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Accept-Language": "en-US,en;q=0.9",
+};
+const RETRY_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
+const defaultSleep = (ms) => new Promise((resolve) => {
+    setTimeout(resolve, ms);
+});
+export class HttpClient {
+    rateLimiter;
+    timeoutMs;
+    maxRetries;
+    retryDelayMs;
+    headers;
+    fetchImpl;
+    sleep;
+    constructor(options = {}) {
+        this.rateLimiter = options.rateLimiter ?? new RateLimiter();
+        this.timeoutMs = options.timeoutMs ?? 20_000;
+        this.maxRetries = options.maxRetries ?? 3;
+        this.retryDelayMs = options.retryDelayMs ?? 1000;
+        this.headers = { ...DEFAULT_HEADERS, ...(options.headers ?? {}) };
+        this.fetchImpl = options.fetchImpl ?? fetch;
+        this.sleep = options.sleep ?? defaultSleep;
+    }
+    async get(url, options = {}) {
+        const requestUrl = buildUrl(url, options.params);
+        let attempt = 0;
+        let lastError = null;
+        while (attempt <= this.maxRetries) {
+            await this.rateLimiter.wait();
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+            try {
+                const response = await this.fetchImpl(requestUrl, {
+                    method: "GET",
+                    headers: { ...this.headers, ...(options.headers ?? {}) },
+                    signal: controller.signal,
+                });
+                clearTimeout(timeout);
+                if (RETRY_STATUS_CODES.has(response.status) && attempt < this.maxRetries) {
+                    attempt += 1;
+                    await this.sleep(this.retryDelayMs * Math.pow(2, attempt - 1));
+                    continue;
+                }
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status} for ${requestUrl}`);
+                }
+                return response;
+            }
+            catch (error) {
+                clearTimeout(timeout);
+                lastError = error;
+                if (attempt >= this.maxRetries) {
+                    throw error;
+                }
+                attempt += 1;
+                await this.sleep(this.retryDelayMs * Math.pow(2, attempt - 1));
+            }
+        }
+        throw lastError instanceof Error
+            ? lastError
+            : new Error(`Request failed for ${requestUrl}`);
+    }
+    async getText(url, options = {}) {
+        const response = await this.get(url, options);
+        return response.text();
+    }
+    async getJson(url, options = {}) {
+        const response = await this.get(url, options);
+        return (await response.json());
+    }
+}
+function buildUrl(url, params) {
+    if (!params || Object.keys(params).length === 0) {
+        return url;
+    }
+    const built = new URL(url);
+    for (const [key, value] of Object.entries(params)) {
+        built.searchParams.set(key, value);
+    }
+    return built.toString();
+}

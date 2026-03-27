@@ -1,0 +1,81 @@
+#!/usr/bin/env node
+import { FastMCP } from "fastmcp";
+import { registerJobTools } from "./tools/jobs.js";
+import { registerDashboardTools } from "./tools/dashboard.js";
+import { registerAiTools } from "./tools/ai.js";
+import { registerCoffeeChatTools } from "./tools/coffee-chat.js";
+import { registerNotificationTools } from "./tools/notifications.js";
+import { registerProfileTools } from "./tools/profile.js";
+import { registerDocumentTools } from "./tools/documents.js";
+import { registerSubscriptionTools } from "./tools/subscription.js";
+import { registerCommentTools } from "./tools/comments.js";
+import { registerCvTools } from "./tools/cv.js";
+import { registerChatbotTools } from "./tools/chatbot.js";
+import { registerScrapingTools } from "./tools/scraping.js";
+import { registerAnalyticsTools } from "./tools/analytics.js";
+import { registerLocalScrapingTools } from "./tools/local-scraping.js";
+import { registerAutoApplyTools } from "./auto-apply/tools.js";
+import { PLUGIN_NAME, PLUGIN_VERSION } from "./version.js";
+const transport = (process.env.TRANSPORT || "stdio");
+const server = new FastMCP({
+    name: PLUGIN_NAME,
+    version: PLUGIN_VERSION,
+    authenticate: async (request) => {
+        // stdio transport: request is undefined, read API key from env
+        if (!request) {
+            const envKey = process.env.JOBJOURNEY_API_KEY;
+            if (!envKey) {
+                throw new Error("Missing JOBJOURNEY_API_KEY environment variable for stdio transport.");
+            }
+            return { apiKey: envKey };
+        }
+        // HTTP transport: read API key from headers
+        const auth = request.headers.authorization;
+        const xApiKey = request.headers["x-api-key"];
+        let apiKey;
+        if (auth && auth.startsWith("Bearer ")) {
+            apiKey = auth.slice(7).trim();
+        }
+        else if (typeof xApiKey === "string") {
+            apiKey = xApiKey.trim();
+        }
+        if (!apiKey) {
+            throw new Error("Missing API key. Provide Authorization: Bearer <key> or X-API-Key header.");
+        }
+        return { apiKey };
+    },
+});
+registerJobTools(server);
+registerDashboardTools(server);
+registerAiTools(server);
+registerCoffeeChatTools(server);
+registerNotificationTools(server);
+registerProfileTools(server);
+registerDocumentTools(server);
+registerSubscriptionTools(server);
+registerCommentTools(server);
+registerCvTools(server);
+registerChatbotTools(server);
+registerScrapingTools(server);
+registerAnalyticsTools(server);
+registerLocalScrapingTools(server);
+registerAutoApplyTools(server);
+if (transport === "httpStream") {
+    const port = parseInt(process.env.PORT || "8080", 10);
+    server.start({
+        transportType: "httpStream",
+        httpStream: { port },
+    });
+}
+else {
+    server.start({
+        transportType: "stdio",
+    });
+    // Exit gracefully when Claude Code closes the stdio pipe
+    process.stdin.on("end", () => {
+        process.exit(0);
+    });
+    process.stdin.on("error", () => {
+        process.exit(0);
+    });
+}
