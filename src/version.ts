@@ -16,4 +16,4 @@ function loadVersion(): string {
   }
 }
 
-export const PLUGIN_VERSION = "3.1.36";
+export const PLUGIN_VERSION = "3.1.37";
