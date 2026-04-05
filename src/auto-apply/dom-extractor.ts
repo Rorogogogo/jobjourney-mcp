@@ -119,6 +119,7 @@ function extractionLogic(skipVisibilityCheck: boolean): ExtractionResult {
     return false;
   }
 
+  // ── Phase 1: Standard HTML form elements ──
   const selector =
     "input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]):not([type=image]), textarea, select";
   const elements = document.querySelectorAll(selector);
@@ -172,6 +173,111 @@ function extractionLogic(skipVisibilityCheck: boolean): ExtractionResult {
               ? (el as HTMLInputElement).value
               : ""
             : (el as HTMLInputElement).value || "",
+      options,
+      fieldGroup: getFieldGroup(el),
+    });
+  }
+
+  // ── Phase 2: ARIA-role elements (React SPAs like SmartRecruiters, Workday, Ashby) ──
+  // These sites render custom components with role="textbox", role="combobox", etc.
+  // instead of native <input>/<select>/<textarea> elements.
+  const ariaSelectors = [
+    '[role="textbox"]:not(input):not(textarea)',
+    '[role="combobox"]:not(input):not(select)',
+    '[role="listbox"]:not(select)',
+    '[role="spinbutton"]:not(input)',
+    '[role="searchbox"]:not(input)',
+    '[contenteditable="true"]',
+  ];
+  const ariaElements = document.querySelectorAll(ariaSelectors.join(", "));
+
+  for (const el of ariaElements) {
+    if (!isVisible(el) || isHoneypot(el)) continue;
+
+    const uniqueSelector = getUniqueSelector(el);
+    if (seen.has(uniqueSelector)) continue;
+    seen.add(uniqueSelector);
+
+    const role = el.getAttribute("role") || "textbox";
+    let ariaType: string;
+    if (role === "combobox" || role === "listbox") ariaType = "combobox";
+    else if (role === "spinbutton") ariaType = "number";
+    else if (el.getAttribute("contenteditable") === "true") ariaType = "textarea";
+    else ariaType = "text";
+
+    // For comboboxes, try to find associated listbox options
+    let options: string[] = [];
+    if (ariaType === "combobox") {
+      const controlsId = el.getAttribute("aria-controls") || el.getAttribute("aria-owns");
+      if (controlsId) {
+        const listbox = document.getElementById(controlsId);
+        if (listbox) {
+          const opts = listbox.querySelectorAll('[role="option"]');
+          options = Array.from(opts)
+            .slice(0, 20) // Cap to avoid huge lists
+            .map((o) => o.textContent?.trim() || "")
+            .filter(Boolean);
+        }
+      }
+    }
+
+    // Get current value from aria-valuetext, textContent, or input child
+    let currentValue = "";
+    const innerInput = el.querySelector("input");
+    if (innerInput) {
+      currentValue = innerInput.value || "";
+    } else if (el.getAttribute("aria-valuetext")) {
+      currentValue = el.getAttribute("aria-valuetext") || "";
+    } else if (ariaType === "textarea" || role === "textbox") {
+      currentValue = (el.textContent?.trim() || "").substring(0, 200);
+    }
+
+    fields.push({
+      selector: uniqueSelector,
+      type: ariaType,
+      label: getLabelText(el),
+      placeholder: el.getAttribute("placeholder") || el.getAttribute("aria-placeholder") || "",
+      required: el.getAttribute("aria-required") === "true",
+      currentValue,
+      options,
+      fieldGroup: getFieldGroup(el),
+    });
+  }
+
+  // ── Phase 3: ARIA checkboxes and radio groups ──
+  const ariaCheckRadio = document.querySelectorAll(
+    '[role="checkbox"]:not(input), [role="radio"]:not(input), [role="switch"]:not(input)'
+  );
+  for (const el of ariaCheckRadio) {
+    if (!isVisible(el) || isHoneypot(el)) continue;
+
+    const uniqueSelector = getUniqueSelector(el);
+    if (seen.has(uniqueSelector)) continue;
+    seen.add(uniqueSelector);
+
+    const role = el.getAttribute("role") || "checkbox";
+    const checked = el.getAttribute("aria-checked") === "true";
+
+    // For radio groups, collect sibling options
+    let options: string[] = [];
+    if (role === "radio") {
+      const group = el.closest('[role="radiogroup"]');
+      if (group) {
+        const groupSelector = getUniqueSelector(group);
+        if (seen.has("radiogroup:" + groupSelector)) continue;
+        seen.add("radiogroup:" + groupSelector);
+        const radios = group.querySelectorAll('[role="radio"]');
+        options = Array.from(radios).map((r) => r.textContent?.trim() || "");
+      }
+    }
+
+    fields.push({
+      selector: uniqueSelector,
+      type: role === "radio" ? "radio" : "checkbox",
+      label: getLabelText(el),
+      placeholder: "",
+      required: el.getAttribute("aria-required") === "true",
+      currentValue: String(checked),
       options,
       fieldGroup: getFieldGroup(el),
     });

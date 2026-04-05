@@ -54,6 +54,7 @@
     "vitest": "^3.0.0"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.82.0",
     "@microsoft/signalr": "^10.0.0",
     "better-sqlite3": "^12.4.5",
     "fastmcp": "^3.33.0",

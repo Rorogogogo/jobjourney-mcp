@@ -13,6 +13,33 @@ export interface UserProfile {
   websiteUrl?: string;
   githubUrl?: string;
   workAuthorization?: string;
+  // Structured Address
+  street?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  country?: string;
+  // EEO
+  gender?: string;
+  pronouns?: string;
+  ethnicity?: string;
+  disabilityStatus?: string;
+  veteranStatus?: string;
+  // Salary
+  salaryMin?: number;
+  salaryMax?: number;
+  salaryCurrency?: string;
+  salaryPeriod?: string;
+  // Availability
+  noticePeriod?: string;
+  availableFrom?: string;
+  requiresSponsorship?: boolean;
+  // Additional
+  dateOfBirth?: string;
+  nationality?: string;
+  citizenship?: string;
+  preferredName?: string;
+  defaultHowDidYouHear?: string;
   skills?: Array<{ name: string; level?: string }>;
   employmentHistory?: Array<{
     companyName: string;
@@ -51,6 +78,28 @@ interface ApiProfileResponse {
   githubUrl?: string;
   workAuthorization?: string;
   summary?: string;
+  street?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  country?: string;
+  gender?: string;
+  pronouns?: string;
+  ethnicity?: string;
+  disabilityStatus?: string;
+  veteranStatus?: string;
+  salaryMin?: number;
+  salaryMax?: number;
+  salaryCurrency?: string;
+  salaryPeriod?: string;
+  noticePeriod?: string;
+  availableFrom?: string;
+  requiresSponsorship?: boolean;
+  dateOfBirth?: string;
+  nationality?: string;
+  citizenship?: string;
+  preferredName?: string;
+  defaultHowDidYouHear?: string;
   skills?: Array<{ name: string; level?: string }>;
   employmentHistory?: Array<{
     company: string;
@@ -94,6 +143,28 @@ function mapApiProfileToUserProfile(raw: ApiProfileResponse): UserProfile {
     linkedinUrl: raw.linkedinUrl,
     githubUrl: raw.githubUrl,
     workAuthorization: raw.workAuthorization,
+    street: raw.street,
+    city: raw.city,
+    state: raw.state,
+    zipCode: raw.zipCode,
+    country: raw.country,
+    gender: raw.gender,
+    pronouns: raw.pronouns,
+    ethnicity: raw.ethnicity,
+    disabilityStatus: raw.disabilityStatus,
+    veteranStatus: raw.veteranStatus,
+    salaryMin: raw.salaryMin,
+    salaryMax: raw.salaryMax,
+    salaryCurrency: raw.salaryCurrency,
+    salaryPeriod: raw.salaryPeriod,
+    noticePeriod: raw.noticePeriod,
+    availableFrom: raw.availableFrom,
+    requiresSponsorship: raw.requiresSponsorship,
+    dateOfBirth: raw.dateOfBirth,
+    nationality: raw.nationality,
+    citizenship: raw.citizenship,
+    preferredName: raw.preferredName,
+    defaultHowDidYouHear: raw.defaultHowDidYouHear,
     skills: raw.skills,
     employmentHistory: raw.employmentHistory?.map((e) => ({
       companyName: e.company,
